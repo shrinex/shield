@@ -25,10 +25,6 @@ func (bt *BearerToken) Credentials() string {
 	return bt.value
 }
 
-func (bt *BearerToken) RequiresFullyAuthenticated() bool {
-	return false
-}
-
 var _ Token = (*UsernamePasswordToken)(nil)
 
 func NewUsernamePasswordToken(username string, password string) Token {
@@ -41,8 +37,4 @@ func (upt *UsernamePasswordToken) Principal() string {
 
 func (upt *UsernamePasswordToken) Credentials() string {
 	return upt.password
-}
-
-func (upt *UsernamePasswordToken) RequiresFullyAuthenticated() bool {
-	return true
 }

@@ -6,7 +6,6 @@ type (
 	Token interface {
 		Principal() string
 		Credentials() string
-		RequiresFullyAuthenticated() bool
 	}
 
 	UserDetails interface {
