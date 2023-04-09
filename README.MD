@@ -1,0 +1,1 @@
+An Authentication & Authorization implementation for Shrine.

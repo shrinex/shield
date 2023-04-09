@@ -1,0 +1,71 @@
+# Created by .ignore support plugin (hsz.mobi)
+### Go template
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# macOS
+.DS_Store
+
+# IDE: Goland
+.idea/
+
+# IDE: VS Code
+.vscode/
+
+# go mod
+vendor/
+
+tmp/
+*.log
+*.pb.go
+*.pb.micro.go
+*.pb.*.go
+
+# artifacts from pprof tooling
+*.prof
+
+# goreleaser artifacts
+dist/
+
+
+# env file:
+.env
+
+# add 2022-09:
+**/ent/*
+!**/ent/schema/
+!**/ent/generate.go
+
+# goctl gen models
+*_gen.go
+
+
+# for vuepress
+node_modules
+coverage
+npm-debug.log
+yarn-error.log
+.nyc_output
+coverage.lcov
+dist
+temp
+test-dts/tsconfig.tsbuildinfo
+packages/*/LICENSE
+explorations
+docs-api
+packages/docs/api
+.yalc
+yalc.lock
+
+# local config files
+**/etc/*-local.yml
