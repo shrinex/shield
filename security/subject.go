@@ -233,7 +233,7 @@ func (s *subject[S]) createSession(ctx context.Context, user authc.UserDetails, 
 
 func (s *subject[S]) registerSession(ctx context.Context, user authc.UserDetails, session S) error {
 	// 踢掉多余的
-	sessions, err := s.registry.ActiveSessions(ctx, user.Principal(), false)
+	sessions, err := s.registry.ActiveSessions(ctx, user.Principal())
 	if err != nil {
 		return err
 	}
