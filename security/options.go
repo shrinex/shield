@@ -74,6 +74,30 @@ var defaultLoginOptions = LoginOptions{
 	IdleTimeout: time.Hour,
 }
 
+func (opt *LoginOptions) GetTimeout() time.Duration {
+	if opt.Timeout > 0 {
+		return opt.Timeout
+	}
+
+	if GetGlobalOptions().Timeout > 0 {
+		return GetGlobalOptions().Timeout
+	}
+
+	return time.Hour
+}
+
+func (opt *LoginOptions) GetIdleTimeout() time.Duration {
+	if opt.IdleTimeout > 0 {
+		return opt.IdleTimeout
+	}
+
+	if GetGlobalOptions().IdleTimeout > 0 {
+		return GetGlobalOptions().IdleTimeout
+	}
+
+	return opt.GetTimeout()
+}
+
 func WithPlatform(platform string) LoginOption {
 	return func(opt *LoginOptions) {
 		platform = strings.TrimSpace(platform)

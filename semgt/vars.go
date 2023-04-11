@@ -1,4 +1,4 @@
-package semgr
+package semgt
 
 import (
 	"errors"
@@ -10,4 +10,8 @@ var (
 
 	ErrAlreadyStopped = errors.New("session already stopped")
 	ErrAlreadyExpired = errors.New("session already expired")
+)
+
+const (
+	AlreadyExpiredKey = "__alreadyExpired"
 )

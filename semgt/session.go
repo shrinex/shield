@@ -1,7 +1,8 @@
-package semgr
+package semgt
 
 import (
 	"context"
+	"github.com/shrinex/shield/codec"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -14,8 +15,12 @@ type (
 		Timeout(context.Context) (time.Duration, error)
 		IdleTimeout(context.Context) (time.Duration, error)
 		LastAccessTime(context.Context) (time.Time, error)
-		Attribute(context.Context, string) (string, bool, error)
-		SetAttribute(context.Context, string, string) error
+		Attribute(context.Context, string, any) (bool, error)
+		AttributeAsInt(context.Context, string) (int64, bool, error)
+		AttributeAsBool(context.Context, string) (bool, bool, error)
+		AttributeAsFloat(context.Context, string) (float64, bool, error)
+		AttributeAsString(context.Context, string) (string, bool, error)
+		SetAttribute(context.Context, string, any) error
 		AttributeKeys(context.Context) ([]string, error)
 		RemoveAttribute(context.Context, string) error
 		Expired(context.Context) (bool, error)
@@ -26,9 +31,10 @@ type (
 	MapSession struct {
 		token          string
 		mu             sync.RWMutex
-		stopped        atomic.Int32
+		stopped        int32
 		startTime      time.Time
 		lastAccessTime time.Time
+		codec          codec.Codec
 		timeout        time.Duration
 		idleTimeout    time.Duration
 		attrs          map[string]string
@@ -37,10 +43,11 @@ type (
 
 var _ Session = (*MapSession)(nil)
 
-func NewSession(token string) *MapSession {
+func NewSession(token string, codec codec.Codec) *MapSession {
 	nowTime := nowFunc()
 	return &MapSession{
 		token:          token,
+		codec:          codec,
 		startTime:      nowTime,
 		lastAccessTime: nowTime,
 		attrs:          make(map[string]string),
@@ -127,19 +134,65 @@ func (s *MapSession) Expired(ctx context.Context) (bool, error) {
 	return timedOut || inactive, nil
 }
 
-func (s *MapSession) Attribute(ctx context.Context, key string) (string, bool, error) {
+func (s *MapSession) Attribute(ctx context.Context, key string, ptr any) (bool, error) {
 	if err := s.checkState(ctx); err != nil {
-		return "", false, err
+		return false, err
 	}
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if value, ok := s.attrs[key]; ok {
-		return value, true, nil
+	data, ok := s.attrs[key]
+	if !ok {
+		return false, nil
 	}
 
-	return "", false, nil
+	err := s.codec.Decode(data, ptr)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
+func (s *MapSession) AttributeAsInt(ctx context.Context, key string) (int64, bool, error) {
+	var result int64
+	found, err := s.Attribute(ctx, key, &result)
+	if err != nil {
+		return 0, false, err
+	}
+
+	return result, found, nil
+}
+
+func (s *MapSession) AttributeAsBool(ctx context.Context, key string) (bool, bool, error) {
+	var result bool
+	found, err := s.Attribute(ctx, key, &result)
+	if err != nil {
+		return false, false, err
+	}
+
+	return result, found, nil
+}
+
+func (s *MapSession) AttributeAsFloat(ctx context.Context, key string) (float64, bool, error) {
+	var result float64
+	found, err := s.Attribute(ctx, key, &result)
+	if err != nil {
+		return 0, false, err
+	}
+
+	return result, found, nil
+}
+
+func (s *MapSession) AttributeAsString(ctx context.Context, key string) (string, bool, error) {
+	var result string
+	found, err := s.Attribute(ctx, key, &result)
+	if err != nil {
+		return "", false, err
+	}
+
+	return result, found, nil
 }
 
 func (s *MapSession) AttributeKeys(ctx context.Context) ([]string, error) {
@@ -158,7 +211,7 @@ func (s *MapSession) AttributeKeys(ctx context.Context) ([]string, error) {
 	return keys, nil
 }
 
-func (s *MapSession) SetAttribute(ctx context.Context, key string, value string) error {
+func (s *MapSession) SetAttribute(ctx context.Context, key string, value any) error {
 	if err := s.checkState(ctx); err != nil {
 		return err
 	}
@@ -166,12 +219,17 @@ func (s *MapSession) SetAttribute(ctx context.Context, key string, value string)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if len(value) == 0 {
+	if value == nil {
 		delete(s.attrs, key)
-	} else {
-		s.attrs[key] = value
+		return nil
 	}
 
+	data, err := s.codec.Encode(value)
+	if err != nil {
+		return err
+	}
+
+	s.attrs[key] = data
 	return nil
 }
 
@@ -199,7 +257,7 @@ func (s *MapSession) Stop(ctx context.Context) error {
 	default:
 	}
 
-	s.stopped.Store(1)
+	atomic.StoreInt32(&s.stopped, 1)
 
 	return nil
 }
@@ -267,7 +325,7 @@ func (s *MapSession) checkState(ctx context.Context) error {
 	default:
 	}
 
-	if s.stopped.Load() == 1 {
+	if atomic.LoadInt32(&s.stopped) == 1 {
 		return ErrAlreadyStopped
 	}
 

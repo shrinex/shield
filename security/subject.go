@@ -4,15 +4,15 @@ import (
 	"context"
 	"github.com/shrinex/shield/authc"
 	"github.com/shrinex/shield/authz"
-	"github.com/shrinex/shield/semgr"
-	"time"
+	"github.com/shrinex/shield/semgt"
+	"sort"
 )
 
 type (
 	Subject interface {
 		Authenticated(context.Context) bool
 		Principal(ctx context.Context) (string, bool, error)
-		Session(ctx context.Context) (semgr.Session, error)
+		Session(ctx context.Context) (semgt.Session, error)
 
 		HasRole(context.Context, authz.Role) (bool, error)
 		HasAnyRole(context.Context, ...authz.Role) (bool, error)
@@ -28,62 +28,54 @@ type (
 
 	sessionCtxKey struct{}
 
-	subject struct {
+	subject[S semgt.Session] struct {
 		authenticator authc.Authenticator
 		authorizer    authz.Authorizer
-		repository    semgr.Repository
-		registry      semgr.Registry
-		encoder       Encoder
+		repository    semgt.Repository[S]
+		registry      semgt.Registry[S]
 	}
 )
 
 var _ Subject = (*subject)(nil)
 
-func (s *subject) Authenticated(ctx context.Context) bool {
-	session, ok := ctx.Value(sessionCtxKey{}).(semgr.Session)
-	if !ok {
+func (s *subject[S]) Authenticated(ctx context.Context) bool {
+	session, err := s.Session(ctx)
+	if err != nil {
 		return false
 	}
 
-	_, found, err := session.Attribute(ctx, KickedOutKey)
-	if err != nil || found {
-		return false
-	}
-
-	return true
+	return session != nil
 }
 
-func (s *subject) Principal(ctx context.Context) (string, bool, error) {
+func (s *subject[S]) Principal(ctx context.Context) (string, bool, error) {
 	session, err := s.Session(ctx)
 	if err != nil {
 		return "", false, err
 	}
 
-	principal, ok, err := session.Attribute(ctx, PrincipalKey)
-	if err != nil || !ok {
-		return "", false, err
-	}
-
-	return principal, true, nil
+	return session.AttributeAsString(ctx, PrincipalKey)
 }
 
-func (s *subject) Session(ctx context.Context) (semgr.Session, error) {
-	session, ok := ctx.Value(sessionCtxKey{}).(semgr.Session)
+func (s *subject[S]) Session(ctx context.Context) (semgt.Session, error) {
+	session, ok := ctx.Value(sessionCtxKey{}).(semgt.Session)
 	if !ok {
-		panic("no session available")
+		return nil, authc.ErrUnauthenticated
 	}
 
-	_, found, err := session.Attribute(ctx, KickedOutKey)
+	_, found, err := session.AttributeAsString(ctx, KickedOutKey)
+
 	if err != nil {
 		return nil, err
-	} else if found {
+	}
+
+	if found {
 		return nil, ErrKickedOut
 	}
 
 	return session, nil
 }
 
-func (s *subject) Login(ctx context.Context, token authc.Token, opts ...LoginOption) (context.Context, error) {
+func (s *subject[S]) Login(ctx context.Context, token authc.Token, opts ...LoginOption) (context.Context, error) {
 	// 先授权
 	user, err := s.authenticator.Authenticate(ctx, token)
 	if err != nil {
@@ -93,13 +85,13 @@ func (s *subject) Login(ctx context.Context, token authc.Token, opts ...LoginOpt
 	opt := apply(opts...)
 
 	if opt.RenewToken {
-		return s.loginWithNewToken(ctx, user, &opt)
+		return s.loginWithNewToken(ctx, user, opt)
 	}
 
-	return s.loginWithOldToken(ctx, user)
+	return s.loginWithOldToken(ctx, token)
 }
 
-func (s *subject) Logout(ctx context.Context) (context.Context, error) {
+func (s *subject[S]) Logout(ctx context.Context) (context.Context, error) {
 	principal, found, err := s.Principal(ctx)
 	if err != nil {
 		return ctx, err
@@ -121,7 +113,7 @@ func (s *subject) Logout(ctx context.Context) (context.Context, error) {
 		return nil, err
 	}
 
-	err = s.registry.Deregister(ctx, session)
+	err = s.registry.Deregister(ctx, principal, session.(S))
 	if err != nil {
 		return nil, err
 	}
@@ -134,65 +126,55 @@ func (s *subject) Logout(ctx context.Context) (context.Context, error) {
 	return context.WithValue(ctx, sessionCtxKey{}, nil), nil
 }
 
-func (s *subject) HasRole(ctx context.Context, role authz.Role) (bool, error) {
+func (s *subject[S]) HasRole(ctx context.Context, role authz.Role) (bool, error) {
 	principal, found, err := s.Principal(ctx)
-	if err != nil {
+	if err != nil || !found {
 		return false, err
-	} else if !found {
-		return false, nil
 	}
 
 	return s.authorizer.HasRole(ctx, principal, role), nil
 }
 
-func (s *subject) HasAnyRole(ctx context.Context, roles ...authz.Role) (bool, error) {
+func (s *subject[S]) HasAnyRole(ctx context.Context, roles ...authz.Role) (bool, error) {
 	principal, found, err := s.Principal(ctx)
-	if err != nil {
+	if err != nil || !found {
 		return false, err
-	} else if !found {
-		return false, nil
 	}
 
 	return s.authorizer.HasAnyRole(ctx, principal, roles...), nil
 }
 
-func (s *subject) HasAllRole(ctx context.Context, roles ...authz.Role) (bool, error) {
+func (s *subject[S]) HasAllRole(ctx context.Context, roles ...authz.Role) (bool, error) {
 	principal, found, err := s.Principal(ctx)
-	if err != nil {
+	if err != nil || !found {
 		return false, err
-	} else if !found {
-		return false, nil
 	}
 
 	return s.authorizer.HasAllRole(ctx, principal, roles...), nil
 }
 
-func (s *subject) HasAuthority(ctx context.Context, authority authz.Authority) (bool, error) {
+func (s *subject[S]) HasAuthority(ctx context.Context, authority authz.Authority) (bool, error) {
 	principal, found, err := s.Principal(ctx)
-	if err != nil {
+	if err != nil || !found {
 		return false, err
-	} else if !found {
-		return false, nil
 	}
+
 	return s.authorizer.HasAuthority(ctx, principal, authority), nil
 }
 
-func (s *subject) HasAnyAuthority(ctx context.Context, authorities ...authz.Authority) (bool, error) {
+func (s *subject[S]) HasAnyAuthority(ctx context.Context, authorities ...authz.Authority) (bool, error) {
 	principal, found, err := s.Principal(ctx)
-	if err != nil {
+	if err != nil || !found {
 		return false, err
-	} else if !found {
-		return false, nil
 	}
+
 	return s.authorizer.HasAnyAuthority(ctx, principal, authorities...), nil
 }
 
-func (s *subject) HasAllAuthority(ctx context.Context, authorities ...authz.Authority) (bool, error) {
+func (s *subject[S]) HasAllAuthority(ctx context.Context, authorities ...authz.Authority) (bool, error) {
 	principal, found, err := s.Principal(ctx)
-	if err != nil {
+	if err != nil || !found {
 		return false, err
-	} else if !found {
-		return false, nil
 	}
 
 	return s.authorizer.HasAllAuthority(ctx, principal, authorities...), nil
@@ -202,13 +184,13 @@ func (s *subject) HasAllAuthority(ctx context.Context, authorities ...authz.Auth
 //		    Private
 //=====================================
 
-func (s *subject) loginWithNewToken(ctx context.Context, user authc.UserDetails, opt *LoginOptions) (context.Context, error) {
+func (s *subject[S]) loginWithNewToken(ctx context.Context, user authc.UserDetails, opt *LoginOptions) (context.Context, error) {
 	session, err := s.createSession(ctx, user, opt)
 	if err != nil {
 		return nil, err
 	}
 
-	err = s.registerSession(ctx, session)
+	err = s.registerSession(ctx, user, session)
 	if err != nil {
 		return nil, err
 	}
@@ -216,116 +198,105 @@ func (s *subject) loginWithNewToken(ctx context.Context, user authc.UserDetails,
 	return context.WithValue(ctx, sessionCtxKey{}, session), nil
 }
 
-func (s *subject) createSession(ctx context.Context, user authc.UserDetails, opt *LoginOptions) (semgr.Session, error) {
+func (s *subject[S]) createSession(ctx context.Context, user authc.UserDetails, opt *LoginOptions) (session S, err error) {
 	// 创建新会话
 	newToken := GetGlobalOptions().NewToken(user.Principal())
-	session, err := s.repository.Create(ctx, newToken, timeout(opt), idleTimeout(opt))
+	session, err = s.repository.Create(ctx, newToken)
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	// 存储用户信息
 	err = session.SetAttribute(ctx, PlatformKey, opt.Platform)
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	err = session.SetAttribute(ctx, PrincipalKey, user.Principal())
 	if err != nil {
-		return nil, err
+		return
 	}
 
-	encoded, err := s.encoder.Encode(user)
+	err = session.SetAttribute(ctx, UserDetailsKey, user)
 	if err != nil {
-		return nil, err
-	}
-
-	err = session.SetAttribute(ctx, UserDetailsKey, encoded)
-	if err != nil {
-		return nil, err
+		return
 	}
 
 	// 保存会话
 	err = s.repository.Save(ctx, session)
 	if err != nil {
-		return nil, err
+		return
 	}
 
-	return session, nil
+	return
 }
 
-func (s *subject) registerSession(ctx context.Context, session semgr.Session) error {
-	// 注册会话
-	token2KickOut, err := s.registry.Register(ctx, session)
+func (s *subject[S]) registerSession(ctx context.Context, user authc.UserDetails, session S) error {
+	// 踢掉多余的
+	sessions, err := s.registry.ActiveSessions(ctx, user.Principal(), false)
 	if err != nil {
 		return err
 	}
 
-	return s.kickOutOldest(ctx, token2KickOut)
-}
-
-func (s *subject) kickOutOldest(ctx context.Context, token2KickOut string) error {
-	if len(token2KickOut) == 0 {
-		return nil
-	}
-
-	session2KickOut, found, err := s.repository.Read(ctx, token2KickOut)
-	if err != nil {
-		return err
-	} else if found {
-		err = session2KickOut.SetAttribute(ctx, KickedOutKey, "true")
-		if err != nil {
-			return err
+	numSessions := len(sessions)
+	concurrency := GetGlobalOptions().Concurrency
+	if numSessions >= concurrency {
+		sort.Sort(byLastAccessTime[S](sessions))
+		expires := sessions[:numSessions-concurrency+1]
+		for _, ss := range expires {
+			err = ss.SetAttribute(ctx, KickedOutKey, true)
+			if err != nil {
+				return err
+			}
 		}
+	}
+
+	// 注册会话
+	err = s.registry.Register(ctx, user.Principal(), session)
+	if err != nil {
+		return err
 	}
 
 	return nil
 }
 
-func (s *subject) loginWithOldToken(ctx context.Context, user authc.UserDetails) (context.Context, error) {
-	session, found, err := s.repository.Read(ctx, user.Principal())
+func (s *subject[S]) loginWithOldToken(ctx context.Context, token authc.Token) (context.Context, error) {
+	session, found, err := s.repository.Read(ctx, token.Principal())
 	if err != nil {
 		return nil, err
-	} else if !found {
-		return nil, semgr.ErrAlreadyExpired
+	}
+
+	if !found {
+		return nil, semgt.ErrAlreadyExpired
 	}
 
 	_ = session.Touch(ctx)
-	_ = s.registry.KeepAlive(ctx, session)
 
 	return context.WithValue(ctx, sessionCtxKey{}, session), nil
 }
 
-func apply(opts ...LoginOption) LoginOptions {
+func apply(opts ...LoginOption) *LoginOptions {
 	opt := defaultLoginOptions
 
 	for _, f := range opts {
 		f(&opt)
 	}
 
-	return opt
+	return &opt
 }
 
-func timeout(opt *LoginOptions) time.Duration {
-	if opt.Timeout > 0 {
-		return opt.Timeout
-	}
+type byLastAccessTime[S semgt.Session] []S
 
-	if GetGlobalOptions().Timeout > 0 {
-		return GetGlobalOptions().Timeout
-	}
-
-	return time.Hour
+func (s byLastAccessTime[S]) Len() int {
+	return len(s)
 }
 
-func idleTimeout(opt *LoginOptions) time.Duration {
-	if opt.IdleTimeout > 0 {
-		return opt.IdleTimeout
-	}
+func (s byLastAccessTime[S]) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
 
-	if GetGlobalOptions().IdleTimeout > 0 {
-		return GetGlobalOptions().IdleTimeout
-	}
-
-	return timeout(opt)
+func (s byLastAccessTime[S]) Less(i, j int) bool {
+	lhs, _ := s[i].LastAccessTime(context.TODO())
+	rhs, _ := s[j].LastAccessTime(context.TODO())
+	return lhs.Before(rhs)
 }
