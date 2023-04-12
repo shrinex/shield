@@ -3,8 +3,9 @@ package security
 import "errors"
 
 const (
+	kickedOutKey = "__kickedOutKey"
+
 	PlatformKey    = "__platformKey"
-	KickedOutKey   = "__kickedOutKey"
 	PrincipalKey   = "__principalKey"
 	UserDetailsKey = "__userDetailsKey"
 

@@ -62,7 +62,7 @@ func (s *subject[S]) Session(ctx context.Context) (semgt.Session, error) {
 		return nil, authc.ErrUnauthenticated
 	}
 
-	_, found, err := session.AttributeAsString(ctx, KickedOutKey)
+	_, found, err := session.AttributeAsString(ctx, kickedOutKey)
 
 	if err != nil {
 		return nil, err
@@ -108,12 +108,12 @@ func (s *subject[S]) Logout(ctx context.Context) (context.Context, error) {
 		return nil, err
 	}
 
-	err = s.repository.Remove(ctx, session.Token())
+	err = s.registry.Deregister(ctx, principal, session.(S))
 	if err != nil {
 		return nil, err
 	}
 
-	err = s.registry.Deregister(ctx, principal, session.(S))
+	err = s.repository.Remove(ctx, session.Token())
 	if err != nil {
 		return nil, err
 	}
@@ -244,7 +244,7 @@ func (s *subject[S]) registerSession(ctx context.Context, user authc.UserDetails
 		sort.Sort(byLastAccessTime[S](sessions))
 		expires := sessions[:numSessions-concurrency+1]
 		for _, ss := range expires {
-			err = ss.SetAttribute(ctx, KickedOutKey, true)
+			err = ss.SetAttribute(ctx, kickedOutKey, true)
 			if err != nil {
 				return err
 			}
@@ -267,7 +267,7 @@ func (s *subject[S]) loginWithOldToken(ctx context.Context, token authc.Token) (
 	}
 
 	if !found {
-		return nil, semgt.ErrAlreadyExpired
+		return nil, semgt.ErrExpired
 	}
 
 	_ = session.Touch(ctx)

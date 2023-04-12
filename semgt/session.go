@@ -57,6 +57,7 @@ func NewSession(token string, codec codec.Codec) *MapSession {
 func NewSessionCopy(src *MapSession) *MapSession {
 	s := &MapSession{
 		token:          src.token,
+		codec:          src.codec,
 		startTime:      src.startTime,
 		lastAccessTime: src.lastAccessTime,
 		timeout:        src.timeout,
@@ -156,43 +157,43 @@ func (s *MapSession) Attribute(ctx context.Context, key string, ptr any) (bool, 
 }
 
 func (s *MapSession) AttributeAsInt(ctx context.Context, key string) (int64, bool, error) {
-	var result int64
-	found, err := s.Attribute(ctx, key, &result)
+	var value int64
+	found, err := s.Attribute(ctx, key, &value)
 	if err != nil {
 		return 0, false, err
 	}
 
-	return result, found, nil
+	return value, found, nil
 }
 
 func (s *MapSession) AttributeAsBool(ctx context.Context, key string) (bool, bool, error) {
-	var result bool
-	found, err := s.Attribute(ctx, key, &result)
+	var value bool
+	found, err := s.Attribute(ctx, key, &value)
 	if err != nil {
 		return false, false, err
 	}
 
-	return result, found, nil
+	return value, found, nil
 }
 
 func (s *MapSession) AttributeAsFloat(ctx context.Context, key string) (float64, bool, error) {
-	var result float64
-	found, err := s.Attribute(ctx, key, &result)
+	var value float64
+	found, err := s.Attribute(ctx, key, &value)
 	if err != nil {
 		return 0, false, err
 	}
 
-	return result, found, nil
+	return value, found, nil
 }
 
 func (s *MapSession) AttributeAsString(ctx context.Context, key string) (string, bool, error) {
-	var result string
-	found, err := s.Attribute(ctx, key, &result)
+	var value string
+	found, err := s.Attribute(ctx, key, &value)
 	if err != nil {
 		return "", false, err
 	}
 
-	return result, found, nil
+	return value, found, nil
 }
 
 func (s *MapSession) AttributeKeys(ctx context.Context) ([]string, error) {
@@ -318,6 +319,18 @@ func (s *MapSession) SetLastAccessTime(ctx context.Context, lastAccessTime time.
 	return nil
 }
 
+func (s *MapSession) RawAttribute(ctx context.Context, key string) (string, bool, error) {
+	if err := s.checkState(ctx); err != nil {
+		return "", false, err
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	value, ok := s.attrs[key]
+	return value, ok, nil
+}
+
 func (s *MapSession) checkState(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
@@ -325,8 +338,15 @@ func (s *MapSession) checkState(ctx context.Context) error {
 	default:
 	}
 
+	s.mu.RLock()
+	if _, ok := s.attrs[AlreadyExpiredKey]; ok {
+		s.mu.RUnlock()
+		return ErrExpired
+	}
+	s.mu.RUnlock()
+
 	if atomic.LoadInt32(&s.stopped) == 1 {
-		return ErrAlreadyStopped
+		return ErrStopped
 	}
 
 	return nil

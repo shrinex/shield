@@ -76,11 +76,6 @@ func (r *MapSessionRepository) Read(ctx context.Context, token string) (*MapSess
 		return nil, false, nil
 	}
 
-	_, found, err := src.AttributeAsBool(ctx, AlreadyExpiredKey)
-	if err != nil || found {
-		return nil, false, err
-	}
-
 	expired, err := src.Expired(ctx)
 	if err != nil {
 		return nil, false, err
@@ -88,6 +83,7 @@ func (r *MapSessionRepository) Read(ctx context.Context, token string) (*MapSess
 
 	if expired {
 		_ = src.SetAttribute(ctx, AlreadyExpiredKey, true)
+		_ = r.Remove(ctx, token)
 		return nil, false, nil
 	}
 

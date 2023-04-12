@@ -28,16 +28,28 @@ type (
 		Platform string
 		// RenewToken 指定登陆时是否需要生成 token
 		RenewToken bool
-		// Timeout 决定会话超时时间
-		Timeout time.Duration
-		// IdleTimeout 表示多久不进行操作就会过期
-		IdleTimeout time.Duration
 	}
 )
 
 //=====================================
 //		   Global Options
 //=====================================
+
+func (opt *Options) GetTimeout() time.Duration {
+	if opt.Timeout > 0 {
+		return opt.Timeout
+	}
+
+	return time.Hour
+}
+
+func (opt *Options) GetIdleTimeout() time.Duration {
+	if opt.IdleTimeout > 0 {
+		return opt.IdleTimeout
+	}
+
+	return opt.GetTimeout()
+}
 
 func SetGlobalOptions(opts Options) {
 	globalOptions.Store(&opts)
@@ -69,33 +81,8 @@ func defaultGlobalOptions() *atomic.Value {
 //=====================================
 
 var defaultLoginOptions = LoginOptions{
-	Platform:    DefaultPlatform,
-	Timeout:     12 * time.Hour,
-	IdleTimeout: time.Hour,
-}
-
-func (opt *LoginOptions) GetTimeout() time.Duration {
-	if opt.Timeout > 0 {
-		return opt.Timeout
-	}
-
-	if GetGlobalOptions().Timeout > 0 {
-		return GetGlobalOptions().Timeout
-	}
-
-	return time.Hour
-}
-
-func (opt *LoginOptions) GetIdleTimeout() time.Duration {
-	if opt.IdleTimeout > 0 {
-		return opt.IdleTimeout
-	}
-
-	if GetGlobalOptions().IdleTimeout > 0 {
-		return GetGlobalOptions().IdleTimeout
-	}
-
-	return opt.GetTimeout()
+	Platform:   DefaultPlatform,
+	RenewToken: false,
 }
 
 func WithPlatform(platform string) LoginOption {
@@ -107,20 +94,8 @@ func WithPlatform(platform string) LoginOption {
 	}
 }
 
-func WithTimeout(timeout time.Duration) LoginOption {
+func WithRenewToken() LoginOption {
 	return func(opt *LoginOptions) {
-		opt.Timeout = timeout
-	}
-}
-
-func WithIdleTimeout(idleTimeout time.Duration) LoginOption {
-	return func(opt *LoginOptions) {
-		opt.IdleTimeout = idleTimeout
-	}
-}
-
-func WithRenewToken(renewable bool) LoginOption {
-	return func(opt *LoginOptions) {
-		opt.RenewToken = renewable
+		opt.RenewToken = true
 	}
 }

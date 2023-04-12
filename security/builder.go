@@ -38,6 +38,10 @@ func (b *Builder[S]) Registry(registry semgt.Registry[S]) *Builder[S] {
 }
 
 func (b *Builder[S]) Build() Subject {
+	if b.authenticator == nil || b.authorizer == nil ||
+		b.repository == nil || b.registry == nil {
+		panic("nil")
+	}
 	return &subject[S]{
 		authenticator: b.authenticator,
 		authorizer:    b.authorizer,

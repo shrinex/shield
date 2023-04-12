@@ -120,7 +120,7 @@ func (r *MapSessionRegistry) ActiveSessions(ctx context.Context, principal strin
 	}
 	r.mu.RUnlock()
 
-	result := make([]*MapSession, 0)
+	sessions := make([]*MapSession, 0)
 	for _, ls := range lists {
 		for e := ls.Front(); e != nil; e = e.Next() {
 			session, found, err := r.repo.Read(ctx, e.Value.(string))
@@ -132,9 +132,9 @@ func (r *MapSessionRegistry) ActiveSessions(ctx context.Context, principal strin
 				continue
 			}
 
-			result = append(result, session)
+			sessions = append(sessions, session)
 		}
 	}
 
-	return result, nil
+	return sessions, nil
 }
