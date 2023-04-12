@@ -30,8 +30,8 @@ func (c *authenticator) Authenticate(ctx context.Context, token Token) (UserDeta
 	for _, r := range c.realms {
 		if r.Supports(token) {
 			user, err := r.LoadUserDetails(ctx, token)
-			if err != nil || user == nil {
-				continue
+			if err != nil {
+				return nil, err
 			}
 			return user, nil
 		}

@@ -36,8 +36,6 @@ type (
 	}
 )
 
-var _ Subject = (*subject)(nil)
-
 func (s *subject[S]) Authenticated(ctx context.Context) bool {
 	session, err := s.Session(ctx)
 	if err != nil {
