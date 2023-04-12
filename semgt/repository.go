@@ -11,7 +11,7 @@ type (
 	Repository[S Session] interface {
 		Save(context.Context, S) error
 		Remove(context.Context, string) error
-		Read(context.Context, string) (S, bool, error)
+		Read(context.Context, string) (S, error)
 		Create(context.Context, string) (S, error)
 	}
 
@@ -61,10 +61,10 @@ func (r *MapSessionRepository) Create(ctx context.Context, token string) (*MapSe
 	return result, nil
 }
 
-func (r *MapSessionRepository) Read(ctx context.Context, token string) (*MapSession, bool, error) {
+func (r *MapSessionRepository) Read(ctx context.Context, token string) (*MapSession, error) {
 	select {
 	case <-ctx.Done():
-		return nil, false, ctx.Err()
+		return nil, ctx.Err()
 	default:
 	}
 
@@ -73,21 +73,21 @@ func (r *MapSessionRepository) Read(ctx context.Context, token string) (*MapSess
 	r.mu.RUnlock()
 
 	if !ok {
-		return nil, false, nil
+		return nil, nil
 	}
 
 	expired, err := src.Expired(ctx)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
 	if expired {
 		_ = src.SetAttribute(ctx, AlreadyExpiredKey, true)
 		_ = r.Remove(ctx, token)
-		return nil, false, nil
+		return nil, nil
 	}
 
-	return NewSessionCopy(src), true, nil
+	return NewSessionCopy(src), nil
 }
 
 func (r *MapSessionRepository) Save(ctx context.Context, session *MapSession) error {

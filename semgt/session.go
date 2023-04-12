@@ -2,6 +2,7 @@ package semgt
 
 import (
 	"context"
+	"errors"
 	"github.com/shrinex/shield/codec"
 	"sync"
 	"sync/atomic"
@@ -122,6 +123,9 @@ func (s *MapSession) LastAccessTime(ctx context.Context) (time.Time, error) {
 
 func (s *MapSession) Expired(ctx context.Context) (bool, error) {
 	if err := s.checkState(ctx); err != nil {
+		if errors.Is(err, ErrExpired) {
+			return true, nil
+		}
 		return false, err
 	}
 

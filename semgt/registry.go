@@ -58,7 +58,7 @@ func (r *MapSessionRegistry) Register(ctx context.Context, principal string, ses
 		return err
 	}
 
-	if !found {
+	if !found || len(platform) == 0 {
 		platform = "universal"
 	}
 
@@ -123,16 +123,14 @@ func (r *MapSessionRegistry) ActiveSessions(ctx context.Context, principal strin
 	sessions := make([]*MapSession, 0)
 	for _, ls := range lists {
 		for e := ls.Front(); e != nil; e = e.Next() {
-			session, found, err := r.repo.Read(ctx, e.Value.(string))
+			session, err := r.repo.Read(ctx, e.Value.(string))
 			if err != nil {
 				return nil, err
 			}
 
-			if !found {
-				continue
+			if session != nil {
+				sessions = append(sessions, session)
 			}
-
-			sessions = append(sessions, session)
 		}
 	}
 

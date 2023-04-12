@@ -261,13 +261,9 @@ func (s *subject[S]) registerSession(ctx context.Context, user authc.UserDetails
 }
 
 func (s *subject[S]) loginWithOldToken(ctx context.Context, token authc.Token) (context.Context, error) {
-	session, found, err := s.repository.Read(ctx, token.Principal())
+	session, err := s.repository.Read(ctx, token.Principal())
 	if err != nil {
 		return nil, err
-	}
-
-	if !found {
-		return nil, semgt.ErrExpired
 	}
 
 	_ = session.Touch(ctx)
