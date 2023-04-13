@@ -60,16 +60,6 @@ func (s *subject[S]) Session(ctx context.Context) (semgt.Session, error) {
 		return nil, authc.ErrUnauthenticated
 	}
 
-	_, found, err := session.AttributeAsString(ctx, kickedOutKey)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if found {
-		return nil, ErrKickedOut
-	}
-
 	return session, nil
 }
 
@@ -183,6 +173,11 @@ func (s *subject[S]) HasAllAuthority(ctx context.Context, authorities ...authz.A
 //=====================================
 
 func (s *subject[S]) loginWithNewToken(ctx context.Context, user authc.UserDetails, opt *LoginOptions) (context.Context, error) {
+	err := s.kickOutOldestIfNeeded(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+
 	session, err := s.createSession(ctx, user, opt)
 	if err != nil {
 		return nil, err
@@ -194,6 +189,39 @@ func (s *subject[S]) loginWithNewToken(ctx context.Context, user authc.UserDetai
 	}
 
 	return context.WithValue(ctx, sessionCtxKey{}, session), nil
+}
+
+func (s *subject[S]) kickOutOldestIfNeeded(ctx context.Context, user authc.UserDetails) error {
+	// 踢掉多余的
+	sessions, err := s.registry.ActiveSessions(ctx, user.Principal())
+	if err != nil {
+		return err
+	}
+
+	numSessions := len(sessions)
+	concurrency := GetGlobalOptions().Concurrency
+	if numSessions >= concurrency {
+		sort.Sort(byLastAccessTime[S](sessions))
+		expires := sessions[:numSessions-concurrency+1]
+		for _, ss := range expires {
+			err = s.registry.Deregister(ctx, user.Principal(), ss)
+			if err != nil {
+				return err
+			}
+
+			err = s.repository.Remove(ctx, ss.Token())
+			if err != nil {
+				return err
+			}
+
+			err = ss.SetAttribute(ctx, semgt.AlreadyKickedOutKey, true)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 func (s *subject[S]) createSession(ctx context.Context, user authc.UserDetails, opt *LoginOptions) (session S, err error) {
@@ -230,27 +258,8 @@ func (s *subject[S]) createSession(ctx context.Context, user authc.UserDetails, 
 }
 
 func (s *subject[S]) registerSession(ctx context.Context, user authc.UserDetails, session S) error {
-	// 踢掉多余的
-	sessions, err := s.registry.ActiveSessions(ctx, user.Principal())
-	if err != nil {
-		return err
-	}
-
-	numSessions := len(sessions)
-	concurrency := GetGlobalOptions().Concurrency
-	if numSessions >= concurrency {
-		sort.Sort(byLastAccessTime[S](sessions))
-		expires := sessions[:numSessions-concurrency+1]
-		for _, ss := range expires {
-			err = ss.SetAttribute(ctx, kickedOutKey, true)
-			if err != nil {
-				return err
-			}
-		}
-	}
-
 	// 注册会话
-	err = s.registry.Register(ctx, user.Principal(), session)
+	err := s.registry.Register(ctx, user.Principal(), session)
 	if err != nil {
 		return err
 	}

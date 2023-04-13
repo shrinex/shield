@@ -8,10 +8,11 @@ import (
 var (
 	nowFunc = time.Now
 
-	ErrStopped = errors.New("session stopped")
-	ErrExpired = errors.New("session expired")
+	ErrExpired   = errors.New("session expired")
+	ErrKickedOut = errors.New("kicked out")
 )
 
 const (
-	AlreadyExpiredKey = "__alreadyExpiredKey"
+	AlreadyExpiredKey   = "__alreadyExpiredKey"
+	AlreadyKickedOutKey = "__alreadyKickedOutKey"
 )

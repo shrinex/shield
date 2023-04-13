@@ -2,10 +2,8 @@ package semgt
 
 import (
 	"context"
-	"errors"
 	"github.com/shrinex/shield/codec"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -32,7 +30,6 @@ type (
 	MapSession struct {
 		token          string
 		mu             sync.RWMutex
-		stopped        int32
 		startTime      time.Time
 		lastAccessTime time.Time
 		codec          codec.Codec
@@ -122,15 +119,18 @@ func (s *MapSession) LastAccessTime(ctx context.Context) (time.Time, error) {
 }
 
 func (s *MapSession) Expired(ctx context.Context) (bool, error) {
-	if err := s.checkState(ctx); err != nil {
-		if errors.Is(err, ErrExpired) {
-			return true, nil
-		}
-		return false, err
+	select {
+	case <-ctx.Done():
+		return false, ctx.Err()
+	default:
 	}
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
+	if _, ok := s.attrs[AlreadyExpiredKey]; ok {
+		return true, nil
+	}
 
 	nowTime := nowFunc()
 	timedOut := s.startTime.Add(s.timeout).Before(nowTime)
@@ -145,9 +145,9 @@ func (s *MapSession) Attribute(ctx context.Context, key string, ptr any) (bool, 
 	}
 
 	s.mu.RLock()
-	defer s.mu.RUnlock()
-
 	data, ok := s.attrs[key]
+	s.mu.RUnlock()
+
 	if !ok {
 		return false, nil
 	}
@@ -221,11 +221,10 @@ func (s *MapSession) SetAttribute(ctx context.Context, key string, value any) er
 		return err
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if value == nil {
+		s.mu.Lock()
 		delete(s.attrs, key)
+		s.mu.Unlock()
 		return nil
 	}
 
@@ -234,7 +233,10 @@ func (s *MapSession) SetAttribute(ctx context.Context, key string, value any) er
 		return err
 	}
 
+	s.mu.Lock()
 	s.attrs[key] = data
+	s.mu.Unlock()
+
 	return nil
 }
 
@@ -252,87 +254,85 @@ func (s *MapSession) RemoveAttribute(ctx context.Context, key string) error {
 }
 
 func (s *MapSession) Touch(ctx context.Context) error {
-	return s.SetLastAccessTime(ctx, nowFunc())
-}
-
-func (s *MapSession) Stop(ctx context.Context) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-	}
-
-	atomic.StoreInt32(&s.stopped, 1)
-
-	return nil
-}
-
-//=====================================
-//		      Setters
-//=====================================
-
-func (s *MapSession) SetStartTime(ctx context.Context, startTime time.Time) error {
 	if err := s.checkState(ctx); err != nil {
 		return err
 	}
 
+	s.SetLastAccessTime(nowFunc())
+
+	return nil
+}
+
+func (s *MapSession) Stop(ctx context.Context) error {
+	return s.SetAttribute(ctx, AlreadyExpiredKey, true)
+}
+
+//=====================================
+//		    Getters & Setters
+//=====================================
+
+func (s *MapSession) SetStartTime(startTime time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.startTime = startTime
-
-	return nil
 }
 
-func (s *MapSession) SetTimeout(ctx context.Context, timeout time.Duration) error {
-	if err := s.checkState(ctx); err != nil {
-		return err
-	}
+func (s *MapSession) GetStartTime() time.Time {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
+	return s.startTime
+}
+
+func (s *MapSession) SetTimeout(timeout time.Duration) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.timeout = timeout
-
-	return nil
 }
 
-func (s *MapSession) SetIdleTimeout(ctx context.Context, idleTimeout time.Duration) error {
-	if err := s.checkState(ctx); err != nil {
-		return err
-	}
+func (s *MapSession) GetTimeout() time.Duration {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
+	return s.timeout
+}
+
+func (s *MapSession) SetIdleTimeout(idleTimeout time.Duration) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.idleTimeout = idleTimeout
-
-	return nil
 }
 
-func (s *MapSession) SetLastAccessTime(ctx context.Context, lastAccessTime time.Time) error {
-	if err := s.checkState(ctx); err != nil {
-		return err
-	}
+func (s *MapSession) GetIdleTimeout() time.Duration {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
+	return s.idleTimeout
+}
+
+func (s *MapSession) SetLastAccessTime(lastAccessTime time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.lastAccessTime = lastAccessTime
-
-	return nil
 }
 
-func (s *MapSession) RawAttribute(ctx context.Context, key string) (string, bool, error) {
-	if err := s.checkState(ctx); err != nil {
-		return "", false, err
-	}
+func (s *MapSession) GetLastAccessTime() time.Time {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
+	return s.lastAccessTime
+}
+
+func (s *MapSession) RawAttribute(key string) (string, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	value, ok := s.attrs[key]
-	return value, ok, nil
+	return value, ok
 }
 
 func (s *MapSession) checkState(ctx context.Context) error {
@@ -343,14 +343,14 @@ func (s *MapSession) checkState(ctx context.Context) error {
 	}
 
 	s.mu.RLock()
-	if _, ok := s.attrs[AlreadyExpiredKey]; ok {
-		s.mu.RUnlock()
-		return ErrExpired
-	}
-	s.mu.RUnlock()
+	defer s.mu.RUnlock()
 
-	if atomic.LoadInt32(&s.stopped) == 1 {
-		return ErrStopped
+	if _, ok := s.attrs[AlreadyKickedOutKey]; ok {
+		return ErrKickedOut
+	}
+
+	if _, ok := s.attrs[AlreadyExpiredKey]; ok {
+		return ErrExpired
 	}
 
 	return nil

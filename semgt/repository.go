@@ -54,8 +54,8 @@ func (r *MapSessionRepository) Create(ctx context.Context, token string) (*MapSe
 	defer r.mu.Unlock()
 
 	result := NewSession(token, r.codec)
-	_ = result.SetTimeout(ctx, r.timeout)
-	_ = result.SetIdleTimeout(ctx, r.idleTimeout)
+	result.SetTimeout(r.timeout)
+	result.SetIdleTimeout(r.idleTimeout)
 	r.lookup[token] = result
 
 	return result, nil
@@ -82,8 +82,8 @@ func (r *MapSessionRepository) Read(ctx context.Context, token string) (*MapSess
 	}
 
 	if expired {
-		_ = src.SetAttribute(ctx, AlreadyExpiredKey, true)
 		_ = r.Remove(ctx, token)
+		_ = src.Stop(ctx)
 		return nil, nil
 	}
 
@@ -152,8 +152,8 @@ func (r *MapSessionRepository) deleteExpired() {
 	ctx := context.TODO()
 	for _, ss := range r.lookup {
 		if expired, _ := ss.Expired(ctx); expired {
-			_ = ss.SetAttribute(ctx, AlreadyExpiredKey, true)
 			delete(r.lookup, ss.Token())
+			_ = ss.Stop(ctx)
 		}
 	}
 }
