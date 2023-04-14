@@ -76,7 +76,7 @@ func (s *subject[S]) Login(ctx context.Context, token authc.Token, opts ...Login
 		return s.loginWithNewToken(ctx, user, opt)
 	}
 
-	return s.loginWithOldToken(ctx, token)
+	return s.loginWithOldToken(ctx, token, user)
 }
 
 func (s *subject[S]) Logout(ctx context.Context) (context.Context, error) {
@@ -97,6 +97,11 @@ func (s *subject[S]) Logout(ctx context.Context) (context.Context, error) {
 	}
 
 	err = s.registry.Deregister(ctx, principal, session.(S))
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.registry.KeepAlive(ctx, principal)
 	if err != nil {
 		return nil, err
 	}
@@ -267,13 +272,14 @@ func (s *subject[S]) registerSession(ctx context.Context, user authc.UserDetails
 	return nil
 }
 
-func (s *subject[S]) loginWithOldToken(ctx context.Context, token authc.Token) (context.Context, error) {
+func (s *subject[S]) loginWithOldToken(ctx context.Context, token authc.Token, user authc.UserDetails) (context.Context, error) {
 	session, err := s.repository.Read(ctx, token.Principal())
 	if err != nil {
 		return nil, err
 	}
 
 	_ = session.Touch(ctx)
+	_ = s.registry.KeepAlive(ctx, user.Principal())
 
 	return context.WithValue(ctx, sessionCtxKey{}, session), nil
 }

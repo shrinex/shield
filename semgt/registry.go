@@ -8,6 +8,7 @@ import (
 
 type (
 	Registry[S Session] interface {
+		KeepAlive(context.Context, string) error
 		Register(context.Context, string, S) error
 		Deregister(context.Context, string, S) error
 		ActiveSessions(context.Context, string) ([]S, error)
@@ -135,4 +136,8 @@ func (r *MapSessionRegistry) ActiveSessions(ctx context.Context, principal strin
 	}
 
 	return sessions, nil
+}
+
+func (r *MapSessionRegistry) KeepAlive(_ context.Context, _ string) error {
+	return nil
 }
