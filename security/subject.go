@@ -11,9 +11,8 @@ import (
 type (
 	Subject interface {
 		Authenticated(context.Context) bool
-		Principal(context.Context) (string, bool, error)
-		UserDetails(context.Context, any) (bool, error)
 		Session(context.Context) (semgt.Session, error)
+		UserDetails(context.Context) (authc.UserDetails, error)
 
 		HasRole(context.Context, authz.Role) (bool, error)
 		HasAnyRole(context.Context, ...authz.Role) (bool, error)
@@ -27,7 +26,8 @@ type (
 		Logout(context.Context) (context.Context, error)
 	}
 
-	sessionCtxKey struct{}
+	sessionCtxKey     struct{}
+	userDetailsCtxKey struct{}
 
 	subject[S semgt.Session] struct {
 		authenticator authc.Authenticator
@@ -46,22 +46,13 @@ func (s *subject[S]) Authenticated(ctx context.Context) bool {
 	return session != nil
 }
 
-func (s *subject[S]) Principal(ctx context.Context) (string, bool, error) {
-	session, err := s.Session(ctx)
-	if err != nil {
-		return "", false, err
+func (s *subject[S]) UserDetails(ctx context.Context) (authc.UserDetails, error) {
+	userDetails, ok := ctx.Value(userDetailsCtxKey{}).(authc.UserDetails)
+	if !ok {
+		return nil, authc.ErrUnauthenticated
 	}
 
-	return session.AttributeAsString(ctx, PrincipalKey)
-}
-
-func (s *subject[S]) UserDetails(ctx context.Context, ptr any) (bool, error) {
-	session, err := s.Session(ctx)
-	if err != nil {
-		return false, err
-	}
-
-	return session.Attribute(ctx, UserDetailsKey, ptr)
+	return userDetails, nil
 }
 
 func (s *subject[S]) Session(ctx context.Context) (semgt.Session, error) {
@@ -90,7 +81,7 @@ func (s *subject[S]) Login(ctx context.Context, token authc.Token, opts ...Login
 }
 
 func (s *subject[S]) Logout(ctx context.Context) (context.Context, error) {
-	principal, found, err := s.Principal(ctx)
+	principal, found, err := s.getPrincipal(ctx)
 	if err != nil {
 		return ctx, err
 	} else if !found {
@@ -103,29 +94,29 @@ func (s *subject[S]) Logout(ctx context.Context) (context.Context, error) {
 
 	session, err := s.Session(ctx)
 	if err != nil {
-		return nil, err
+		return ctx, err
 	}
 
 	err = s.registry.Deregister(ctx, principal, session.(S))
 	if err != nil {
-		return nil, err
+		return ctx, err
 	}
 
 	err = s.repository.Remove(ctx, session.Token())
 	if err != nil {
-		return nil, err
+		return ctx, err
 	}
 
 	err = session.Stop(ctx)
 	if err != nil {
-		return nil, err
+		return ctx, err
 	}
-
-	return context.WithValue(ctx, sessionCtxKey{}, nil), nil
+	ctx = context.WithValue(ctx, sessionCtxKey{}, nil)
+	return context.WithValue(ctx, userDetailsCtxKey{}, nil), nil
 }
 
 func (s *subject[S]) HasRole(ctx context.Context, role authz.Role) (bool, error) {
-	principal, found, err := s.Principal(ctx)
+	principal, found, err := s.getPrincipal(ctx)
 	if err != nil || !found {
 		return false, err
 	}
@@ -134,7 +125,7 @@ func (s *subject[S]) HasRole(ctx context.Context, role authz.Role) (bool, error)
 }
 
 func (s *subject[S]) HasAnyRole(ctx context.Context, roles ...authz.Role) (bool, error) {
-	principal, found, err := s.Principal(ctx)
+	principal, found, err := s.getPrincipal(ctx)
 	if err != nil || !found {
 		return false, err
 	}
@@ -143,7 +134,7 @@ func (s *subject[S]) HasAnyRole(ctx context.Context, roles ...authz.Role) (bool,
 }
 
 func (s *subject[S]) HasAllRole(ctx context.Context, roles ...authz.Role) (bool, error) {
-	principal, found, err := s.Principal(ctx)
+	principal, found, err := s.getPrincipal(ctx)
 	if err != nil || !found {
 		return false, err
 	}
@@ -152,7 +143,7 @@ func (s *subject[S]) HasAllRole(ctx context.Context, roles ...authz.Role) (bool,
 }
 
 func (s *subject[S]) HasAuthority(ctx context.Context, authority authz.Authority) (bool, error) {
-	principal, found, err := s.Principal(ctx)
+	principal, found, err := s.getPrincipal(ctx)
 	if err != nil || !found {
 		return false, err
 	}
@@ -161,7 +152,7 @@ func (s *subject[S]) HasAuthority(ctx context.Context, authority authz.Authority
 }
 
 func (s *subject[S]) HasAnyAuthority(ctx context.Context, authorities ...authz.Authority) (bool, error) {
-	principal, found, err := s.Principal(ctx)
+	principal, found, err := s.getPrincipal(ctx)
 	if err != nil || !found {
 		return false, err
 	}
@@ -170,7 +161,7 @@ func (s *subject[S]) HasAnyAuthority(ctx context.Context, authorities ...authz.A
 }
 
 func (s *subject[S]) HasAllAuthority(ctx context.Context, authorities ...authz.Authority) (bool, error) {
-	principal, found, err := s.Principal(ctx)
+	principal, found, err := s.getPrincipal(ctx)
 	if err != nil || !found {
 		return false, err
 	}
@@ -182,23 +173,38 @@ func (s *subject[S]) HasAllAuthority(ctx context.Context, authorities ...authz.A
 //		    Private
 //=====================================
 
+func (s *subject[S]) getPrincipal(ctx context.Context) (string, bool, error) {
+	session, err := s.Session(ctx)
+	if err != nil || session == nil {
+		return "", false, err
+	}
+
+	return session.AttributeAsString(ctx, PrincipalKey)
+}
+
 func (s *subject[S]) loginWithNewToken(ctx context.Context, user authc.UserDetails, opt *LoginOptions) (context.Context, error) {
 	err := s.kickOutOldestIfNeeded(ctx, user)
 	if err != nil {
-		return nil, err
+		return ctx, err
 	}
 
 	session, err := s.createSession(ctx, user, opt)
 	if err != nil {
-		return nil, err
+		return ctx, err
 	}
 
 	err = s.registerSession(ctx, user, session)
 	if err != nil {
-		return nil, err
+		return ctx, err
 	}
 
-	return context.WithValue(ctx, sessionCtxKey{}, session), nil
+	err = session.SetAttribute(ctx, UserDetailsKey, user)
+	if err != nil {
+		return ctx, err
+	}
+
+	ctx = context.WithValue(ctx, sessionCtxKey{}, session)
+	return context.WithValue(ctx, userDetailsCtxKey{}, user), nil
 }
 
 func (s *subject[S]) kickOutOldestIfNeeded(ctx context.Context, user authc.UserDetails) error {
@@ -253,11 +259,6 @@ func (s *subject[S]) createSession(ctx context.Context, user authc.UserDetails, 
 		return
 	}
 
-	err = session.SetAttribute(ctx, UserDetailsKey, user)
-	if err != nil {
-		return
-	}
-
 	// 保存会话
 	err = s.repository.Save(ctx, session)
 	if err != nil {
@@ -280,13 +281,14 @@ func (s *subject[S]) registerSession(ctx context.Context, user authc.UserDetails
 func (s *subject[S]) loginWithOldToken(ctx context.Context, token authc.Token, user authc.UserDetails) (context.Context, error) {
 	session, err := s.repository.Read(ctx, token.Principal())
 	if err != nil {
-		return nil, err
+		return ctx, err
 	}
 
 	_ = session.Touch(ctx)
 	_ = s.registry.KeepAlive(ctx, user.Principal())
 
-	return context.WithValue(ctx, sessionCtxKey{}, session), nil
+	ctx = context.WithValue(ctx, sessionCtxKey{}, session)
+	return context.WithValue(ctx, userDetailsCtxKey{}, user), nil
 }
 
 func apply(opts ...LoginOption) *LoginOptions {

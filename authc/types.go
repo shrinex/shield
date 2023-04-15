@@ -10,7 +10,6 @@ type (
 
 	UserDetails interface {
 		Principal() string
-		Credentials() string
 	}
 
 	Realm interface {
