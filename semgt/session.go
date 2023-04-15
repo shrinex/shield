@@ -335,6 +335,17 @@ func (s *MapSession) RawAttribute(key string) (string, bool) {
 	return value, ok
 }
 
+func (s *MapSession) SetRawAttribute(key string, value string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if len(value) == 0 {
+		delete(s.attrs, key)
+	} else {
+		s.attrs[key] = value
+	}
+}
+
 func (s *MapSession) checkState(ctx context.Context) error {
 	select {
 	case <-ctx.Done():

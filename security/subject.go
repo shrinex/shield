@@ -11,8 +11,9 @@ import (
 type (
 	Subject interface {
 		Authenticated(context.Context) bool
-		Principal(ctx context.Context) (string, bool, error)
-		Session(ctx context.Context) (semgt.Session, error)
+		Principal(context.Context) (string, bool, error)
+		UserDetails(context.Context, any) (bool, error)
+		Session(context.Context) (semgt.Session, error)
 
 		HasRole(context.Context, authz.Role) (bool, error)
 		HasAnyRole(context.Context, ...authz.Role) (bool, error)
@@ -52,6 +53,15 @@ func (s *subject[S]) Principal(ctx context.Context) (string, bool, error) {
 	}
 
 	return session.AttributeAsString(ctx, PrincipalKey)
+}
+
+func (s *subject[S]) UserDetails(ctx context.Context, ptr any) (bool, error) {
+	session, err := s.Session(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	return session.Attribute(ctx, UserDetailsKey, ptr)
 }
 
 func (s *subject[S]) Session(ctx context.Context) (semgt.Session, error) {
@@ -97,11 +107,6 @@ func (s *subject[S]) Logout(ctx context.Context) (context.Context, error) {
 	}
 
 	err = s.registry.Deregister(ctx, principal, session.(S))
-	if err != nil {
-		return nil, err
-	}
-
-	err = s.registry.KeepAlive(ctx, principal)
 	if err != nil {
 		return nil, err
 	}
