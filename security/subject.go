@@ -188,17 +188,12 @@ func (s *subject[S]) loginWithNewToken(ctx context.Context, user authc.UserDetai
 		return ctx, err
 	}
 
-	session, err := s.createSession(ctx, user, opt)
+	session, err := s.createAndSaveSession(ctx, user, opt)
 	if err != nil {
 		return ctx, err
 	}
 
 	err = s.registerSession(ctx, user, session)
-	if err != nil {
-		return ctx, err
-	}
-
-	err = session.SetAttribute(ctx, UserDetailsKey, user)
 	if err != nil {
 		return ctx, err
 	}
@@ -240,7 +235,7 @@ func (s *subject[S]) kickOutOldestIfNeeded(ctx context.Context, user authc.UserD
 	return nil
 }
 
-func (s *subject[S]) createSession(ctx context.Context, user authc.UserDetails, opt *LoginOptions) (session S, err error) {
+func (s *subject[S]) createAndSaveSession(ctx context.Context, user authc.UserDetails, opt *LoginOptions) (session S, err error) {
 	// 创建新会话
 	newToken := GetGlobalOptions().NewToken(user.Principal())
 	session, err = s.repository.Create(ctx, newToken)
@@ -255,6 +250,11 @@ func (s *subject[S]) createSession(ctx context.Context, user authc.UserDetails, 
 	}
 
 	err = session.SetAttribute(ctx, PrincipalKey, user.Principal())
+	if err != nil {
+		return
+	}
+
+	err = session.SetAttribute(ctx, UserDetailsKey, user)
 	if err != nil {
 		return
 	}
