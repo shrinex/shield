@@ -12,12 +12,12 @@ func NewRole(name string) Role {
 	return role(name)
 }
 
-func (r role) RawValue() string {
+func (r role) Desc() string {
 	return string(r)
 }
 
 func (r role) Implies(role Role) bool {
-	return r.RawValue() == role.RawValue()
+	return r.Desc() == role.Desc()
 }
 
 var _ Authority = (*authority)(nil)
@@ -26,10 +26,10 @@ func NewAuthority(name string) Authority {
 	return authority(name)
 }
 
-func (a authority) RawValue() string {
+func (a authority) Desc() string {
 	return string(a)
 }
 
 func (a authority) Implies(authority Authority) bool {
-	return a.RawValue() == authority.RawValue()
+	return a.Desc() == authority.Desc()
 }

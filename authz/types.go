@@ -7,12 +7,12 @@ import (
 
 type (
 	Role interface {
-		RawValue() string
+		Desc() string
 		Implies(Role) bool
 	}
 
 	Authority interface {
-		RawValue() string
+		Desc() string
 		Implies(Authority) bool
 	}
 
