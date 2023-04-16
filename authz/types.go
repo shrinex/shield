@@ -1,6 +1,9 @@
 package authz
 
-import "context"
+import (
+	"context"
+	"github.com/shrinex/shield/authc"
+)
 
 type (
 	Role interface {
@@ -14,17 +17,17 @@ type (
 	}
 
 	Realm interface {
-		LoadRoles(context.Context, string) ([]Role, error)
-		LoadAuthorities(context.Context, string) ([]Authority, error)
+		LoadRoles(context.Context, authc.UserDetails) ([]Role, error)
+		LoadAuthorities(context.Context, authc.UserDetails) ([]Authority, error)
 	}
 
 	Authorizer interface {
-		HasRole(context.Context, string, Role) bool
-		HasAnyRole(context.Context, string, ...Role) bool
-		HasAllRole(context.Context, string, ...Role) bool
+		HasRole(context.Context, authc.UserDetails, Role) bool
+		HasAnyRole(context.Context, authc.UserDetails, ...Role) bool
+		HasAllRole(context.Context, authc.UserDetails, ...Role) bool
 
-		HasAuthority(context.Context, string, Authority) bool
-		HasAnyAuthority(context.Context, string, ...Authority) bool
-		HasAllAuthority(context.Context, string, ...Authority) bool
+		HasAuthority(context.Context, authc.UserDetails, Authority) bool
+		HasAnyAuthority(context.Context, authc.UserDetails, ...Authority) bool
+		HasAllAuthority(context.Context, authc.UserDetails, ...Authority) bool
 	}
 )

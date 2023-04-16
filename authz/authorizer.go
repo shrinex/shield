@@ -1,6 +1,9 @@
 package authz
 
-import "context"
+import (
+	"context"
+	"github.com/shrinex/shield/authc"
+)
 
 type (
 	authorizer struct {
@@ -14,9 +17,9 @@ func NewAuthorizer(realm Realm, realms ...Realm) Authorizer {
 	return &authorizer{realms: append(realms, realm)}
 }
 
-func (z *authorizer) HasRole(ctx context.Context, principal string, role Role) bool {
+func (z *authorizer) HasRole(ctx context.Context, userDetails authc.UserDetails, role Role) bool {
 	for _, r := range z.realms {
-		roles, err := r.LoadRoles(ctx, principal)
+		roles, err := r.LoadRoles(ctx, userDetails)
 		if err != nil {
 			continue
 		}
@@ -31,9 +34,9 @@ func (z *authorizer) HasRole(ctx context.Context, principal string, role Role) b
 	return false
 }
 
-func (z *authorizer) HasAnyRole(ctx context.Context, principal string, roles ...Role) bool {
+func (z *authorizer) HasAnyRole(ctx context.Context, userDetails authc.UserDetails, roles ...Role) bool {
 	for _, role := range roles {
-		if z.HasRole(ctx, principal, role) {
+		if z.HasRole(ctx, userDetails, role) {
 			return true
 		}
 	}
@@ -41,9 +44,9 @@ func (z *authorizer) HasAnyRole(ctx context.Context, principal string, roles ...
 	return false
 }
 
-func (z *authorizer) HasAllRole(ctx context.Context, principal string, roles ...Role) bool {
+func (z *authorizer) HasAllRole(ctx context.Context, userDetails authc.UserDetails, roles ...Role) bool {
 	for _, role := range roles {
-		if !z.HasRole(ctx, principal, role) {
+		if !z.HasRole(ctx, userDetails, role) {
 			return false
 		}
 	}
@@ -51,9 +54,9 @@ func (z *authorizer) HasAllRole(ctx context.Context, principal string, roles ...
 	return true
 }
 
-func (z *authorizer) HasAuthority(ctx context.Context, principal string, authority Authority) bool {
+func (z *authorizer) HasAuthority(ctx context.Context, userDetails authc.UserDetails, authority Authority) bool {
 	for _, r := range z.realms {
-		authorities, err := r.LoadAuthorities(ctx, principal)
+		authorities, err := r.LoadAuthorities(ctx, userDetails)
 		if err != nil {
 			continue
 		}
@@ -67,9 +70,9 @@ func (z *authorizer) HasAuthority(ctx context.Context, principal string, authori
 	return false
 }
 
-func (z *authorizer) HasAnyAuthority(ctx context.Context, principal string, authorities ...Authority) bool {
+func (z *authorizer) HasAnyAuthority(ctx context.Context, userDetails authc.UserDetails, authorities ...Authority) bool {
 	for _, authority := range authorities {
-		if z.HasAuthority(ctx, principal, authority) {
+		if z.HasAuthority(ctx, userDetails, authority) {
 			return true
 		}
 	}
@@ -77,9 +80,9 @@ func (z *authorizer) HasAnyAuthority(ctx context.Context, principal string, auth
 	return false
 }
 
-func (z *authorizer) HasAllAuthority(ctx context.Context, principal string, authorities ...Authority) bool {
+func (z *authorizer) HasAllAuthority(ctx context.Context, userDetails authc.UserDetails, authorities ...Authority) bool {
 	for _, authority := range authorities {
-		if !z.HasAuthority(ctx, principal, authority) {
+		if !z.HasAuthority(ctx, userDetails, authority) {
 			return false
 		}
 	}

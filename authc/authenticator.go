@@ -40,10 +40,10 @@ func (c *authenticator) Authenticate(ctx context.Context, token Token) (UserDeta
 	return nil, ErrUnauthenticated
 }
 
-func (c *authenticator) Logout(ctx context.Context, principal string) {
+func (c *authenticator) Logout(ctx context.Context, userDetails UserDetails) {
 	for _, r := range c.realms {
 		if la, ok := r.(LogoutAware); ok {
-			la.Logout(ctx, principal)
+			la.Logout(ctx, userDetails)
 		}
 	}
 }

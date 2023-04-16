@@ -18,7 +18,7 @@ type (
 	}
 
 	LogoutAware interface {
-		Logout(context.Context, string)
+		Logout(context.Context, UserDetails)
 	}
 
 	Authenticator interface {
