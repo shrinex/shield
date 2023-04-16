@@ -11,7 +11,12 @@ type (
 	}
 )
 
-var _ Authorizer = (*authorizer)(nil)
+var (
+	_ Authorizer = (*authorizer)(nil)
+
+	// NoopAuthorizer does nothing
+	NoopAuthorizer = &authorizer{realms: make([]Realm, 0)}
+)
 
 func NewAuthorizer(realm Realm, realms ...Realm) Authorizer {
 	return &authorizer{realms: append(realms, realm)}
