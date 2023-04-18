@@ -24,6 +24,7 @@ type (
 		RemoveAttribute(context.Context, string) error
 		Expired(context.Context) (bool, error)
 		Touch(context.Context) error
+		Flush(context.Context) error
 		Stop(context.Context) error
 	}
 
@@ -260,6 +261,15 @@ func (s *MapSession) Touch(ctx context.Context) error {
 
 	s.SetLastAccessTime(nowFunc())
 
+	return nil
+}
+
+func (s *MapSession) Flush(ctx context.Context) error {
+	if err := s.checkState(ctx); err != nil {
+		return err
+	}
+
+	// no-op
 	return nil
 }
 
