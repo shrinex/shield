@@ -8,10 +8,16 @@ import (
 )
 
 type (
+	// Repository is an interface for managing Session instances
 	Repository[S Session] interface {
+		// Save ensures the Session created by Create) is saved
 		Save(context.Context, S) error
+		// Remove the Session with the given token or does nothing if the Session is not found
 		Remove(context.Context, string) error
+		// Read the Session by the token or nil if no Session is found
+		// Note that Read never returns an expired Session
 		Read(context.Context, string) (S, error)
+		// Create a new Session that is capable of being persisted by this Repository
 		Create(context.Context, string) (S, error)
 	}
 

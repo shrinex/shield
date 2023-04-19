@@ -8,8 +8,11 @@ import (
 )
 
 type (
+	// Option can be used to customize Options
 	Option func(*Options)
 
+	// Options contains config attribute that can
+	// affect how Subject manages the semgt.Session
 	Options struct {
 		// Timeout 决定会话超时时间
 		Timeout time.Duration

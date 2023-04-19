@@ -3,14 +3,17 @@ package codec
 import "encoding/json"
 
 type (
+	// Encoder is used to serialize the specified attribute value
 	Encoder interface {
 		Encode(v any) (string, error)
 	}
 
+	// Decoder is used to deserialize the specified attribute value
 	Decoder interface {
 		Decode(string, any) error
 	}
 
+	// Codec combines Encoder & Decoder
 	Codec interface {
 		Encoder
 		Decoder

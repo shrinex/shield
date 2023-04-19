@@ -9,20 +9,36 @@ import (
 )
 
 type (
+	// A Subject represents state and security operations for a single application user.
+	// These operations include authentication (login/logout), authorization (access control),
+	// and session access.
+	// Subject can be created by Builder.
 	Subject interface {
+		// Authenticated 检测当前会话是否以授权
 		Authenticated(context.Context) bool
+		// Session 返回当前会话
 		Session(context.Context) (semgt.Session, error)
+		// UserDetails 返回当前登录的用户
 		UserDetails(context.Context) (authc.UserDetails, error)
 
+		// HasRole 检测当前登录的用户是否具有指定角色
 		HasRole(context.Context, authz.Role) bool
+		// HasAnyRole 检测当前登录的用户是否具有任一角色
 		HasAnyRole(context.Context, ...authz.Role) bool
+		// HasAllRole 检测当前登录的用户是否具有全部角色
 		HasAllRole(context.Context, ...authz.Role) bool
 
+		// HasAuthority 检测当前登录的用户是否具有指定权限
 		HasAuthority(context.Context, authz.Authority) bool
+		// HasAnyAuthority 检测当前登录的用户是否具有任一角色
 		HasAnyAuthority(context.Context, ...authz.Authority) bool
+		// HasAllAuthority 检测当前登录的用户是否具有全部角色
 		HasAllAuthority(context.Context, ...authz.Authority) bool
 
+		// Login 执行用户登录
+		// 成功登录后，返回的 context.Context 会包含用户信息和会话
 		Login(context.Context, authc.Token, ...LoginOption) (context.Context, error)
+		// Logout 推出登录，清理资源
 		Logout(context.Context) (context.Context, error)
 	}
 

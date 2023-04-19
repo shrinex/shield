@@ -8,23 +8,37 @@ import (
 )
 
 type (
+	// Session provides a way to identify a user in an agnostic way
 	Session interface {
+		// Token is a unique string that identifies the Session
 		Token() string
+		// StartTime returns the creation time
 		StartTime(context.Context) (time.Time, error)
+		// Timeout 返回超时时间（绝对时间）
 		Timeout(context.Context) (time.Duration, error)
+		// IdleTimeout 返回失活时间（相对时间）
 		IdleTimeout(context.Context) (time.Duration, error)
+		// LastAccessTime 返回最后访问时间
 		LastAccessTime(context.Context) (time.Time, error)
+		// Attribute 返回指定 key 对于的属性值
 		Attribute(context.Context, string, any) (bool, error)
 		AttributeAsInt(context.Context, string) (int64, bool, error)
 		AttributeAsBool(context.Context, string) (bool, bool, error)
 		AttributeAsFloat(context.Context, string) (float64, bool, error)
 		AttributeAsString(context.Context, string) (string, bool, error)
+		// SetAttribute 记录 key - value 关联
 		SetAttribute(context.Context, string, any) error
+		// AttributeKeys 返回所以的 key
 		AttributeKeys(context.Context) ([]string, error)
+		// RemoveAttribute 删除 key 对应的属性值
 		RemoveAttribute(context.Context, string) error
+		// Expired 检测 Session 是否已过期
 		Expired(context.Context) (bool, error)
+		// Touch 更新 LastAccessTime，避免 Session 失活
 		Touch(context.Context) error
+		// Flush 将 Session 落盘
 		Flush(context.Context) error
+		// Stop 停止当前 Session
 		Stop(context.Context) error
 	}
 

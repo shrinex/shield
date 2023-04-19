@@ -7,10 +7,15 @@ import (
 )
 
 type (
+	// Registry is used to maintain a registry of Session instances
 	Registry[S Session] interface {
+		// KeepAlive helps keep the Session alive, e.g. not expire
 		KeepAlive(context.Context, string) error
+		// Register registers Session under the specified principal
 		Register(context.Context, string, S) error
+		// Deregister deregister  the specified Session
 		Deregister(context.Context, string, S) error
+		// ActiveSessions returns all active Session managed by this registry
 		ActiveSessions(context.Context, string) ([]S, error)
 	}
 
