@@ -14,34 +14,37 @@ type (
 		Token() string
 		// StartTime returns the creation time
 		StartTime(context.Context) (time.Time, error)
-		// Timeout 返回超时时间（绝对时间）
+		// Timeout controls the maximum length of time that a
+		// session is valid for before it expires.
 		Timeout(context.Context) (time.Duration, error)
-		// IdleTimeout 返回失活时间（相对时间）
+		// IdleTimeout controls the maximum length of time a
+		// session can be inactive before it expires
 		IdleTimeout(context.Context) (time.Duration, error)
-		// LastAccessTime 返回最后访问时间
+		// LastAccessTime returns the last time this Session was accessed
 		LastAccessTime(context.Context) (time.Time, error)
-		// Attribute 返回指定 key 对于的属性值
+		// Attribute gets the Object associated with the specified key
 		Attribute(context.Context, string, any) (bool, error)
 		AttributeAsInt(context.Context, string) (int64, bool, error)
 		AttributeAsBool(context.Context, string) (bool, bool, error)
 		AttributeAsFloat(context.Context, string) (float64, bool, error)
 		AttributeAsString(context.Context, string) (string, bool, error)
-		// SetAttribute 记录 key - value 关联
+		// SetAttribute sets the attribute value for the provided attribute key
 		SetAttribute(context.Context, string, any) error
-		// AttributeKeys 返回所以的 key
+		// AttributeKeys returns the attribute keys that have a value associated with it
 		AttributeKeys(context.Context) ([]string, error)
-		// RemoveAttribute 删除 key 对应的属性值
+		// RemoveAttribute Rrmoves the attribute with the provided attribute key
 		RemoveAttribute(context.Context, string) error
-		// Expired 检测 Session 是否已过期
+		// Expired returns true if the session is expired
 		Expired(context.Context) (bool, error)
-		// Touch 更新 LastAccessTime，避免 Session 失活
+		// Touch sets the last accessed time
 		Touch(context.Context) error
-		// Flush 将 Session 落盘
+		// Flush ensures the Session is saved
 		Flush(context.Context) error
-		// Stop 停止当前 Session
+		// Stop expires this session
 		Stop(context.Context) error
 	}
 
+	// MapSession is a Session implementation that is backed by a map
 	MapSession struct {
 		token          string
 		mu             sync.RWMutex

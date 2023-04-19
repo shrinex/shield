@@ -1,1 +1,1 @@
-An Authentication & Authorization implementation for Shrine.
+An Authentication & Authorization implementation for Shrine, inspired by Spring Security & Apache Shiro.

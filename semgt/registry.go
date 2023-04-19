@@ -13,7 +13,7 @@ type (
 		KeepAlive(context.Context, string) error
 		// Register registers Session under the specified principal
 		Register(context.Context, string, S) error
-		// Deregister deregister  the specified Session
+		// Deregister deregister the specified Session
 		Deregister(context.Context, string, S) error
 		// ActiveSessions returns all active Session managed by this registry
 		ActiveSessions(context.Context, string) ([]S, error)
@@ -24,6 +24,8 @@ type (
 		principal string
 	}
 
+	// MapSessionRegistry is a Registry backed by
+	// a map and that uses a MapSessionRepository
 	MapSessionRegistry struct {
 		mu   sync.RWMutex
 		repo *MapSessionRepository

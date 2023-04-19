@@ -14,31 +14,33 @@ type (
 	// and session access.
 	// Subject can be created by Builder.
 	Subject interface {
-		// Authenticated 检测当前会话是否以授权
+		// Authenticated returns true if this Subject/user proved their identity
+		// during their current session by providing valid credentials matching
+		// those known to the system, false otherwise
 		Authenticated(context.Context) bool
-		// Session 返回当前会话
+		// Session returns the application Session associated with this Subject
 		Session(context.Context) (semgt.Session, error)
-		// UserDetails 返回当前登录的用户
+		// UserDetails returns the authenticated user
 		UserDetails(context.Context) (authc.UserDetails, error)
 
-		// HasRole 检测当前登录的用户是否具有指定角色
+		// HasRole specifies a user requires an role
 		HasRole(context.Context, authz.Role) bool
-		// HasAnyRole 检测当前登录的用户是否具有任一角色
+		// HasAnyRole specifies that a user requires one of many role
 		HasAnyRole(context.Context, ...authz.Role) bool
-		// HasAllRole 检测当前登录的用户是否具有全部角色
+		// HasAllRole specifies that a user requires all of roles
 		HasAllRole(context.Context, ...authz.Role) bool
 
-		// HasAuthority 检测当前登录的用户是否具有指定权限
+		// HasAuthority specifies a user requires an authority
 		HasAuthority(context.Context, authz.Authority) bool
-		// HasAnyAuthority 检测当前登录的用户是否具有任一角色
+		// HasAnyAuthority specifies that a user requires one of many authorities
 		HasAnyAuthority(context.Context, ...authz.Authority) bool
-		// HasAllAuthority 检测当前登录的用户是否具有全部角色
+		// HasAllAuthority specifies that a user requires all of authorities
 		HasAllAuthority(context.Context, ...authz.Authority) bool
 
-		// Login 执行用户登录
-		// 成功登录后，返回的 context.Context 会包含用户信息和会话
+		// Login performs a login attempt for this Subject
 		Login(context.Context, authc.Token, ...LoginOption) (context.Context, error)
-		// Logout 推出登录，清理资源
+		// Logout logs out this Subject and invalidates and/or removes any
+		// associated entities, such as a Session and authorization data
 		Logout(context.Context) (context.Context, error)
 	}
 
@@ -102,9 +104,7 @@ func (s *subject[S]) Logout(ctx context.Context) (context.Context, error) {
 		return ctx, err
 	}
 
-	if la, ok := s.authenticator.(authc.LogoutAware); ok {
-		la.Logout(ctx, userDetails)
-	}
+	s.logoutIfPossible(ctx, userDetails)
 
 	session, err := s.Session(ctx)
 	if err != nil {
@@ -289,6 +289,24 @@ func (s *subject[S]) loginWithOldToken(ctx context.Context, token authc.Token, u
 
 	ctx = context.WithValue(ctx, sessionCtxKey{}, session)
 	return context.WithValue(ctx, userDetailsCtxKey{}, userDetails), nil
+}
+
+func (s *subject[S]) logoutIfPossible(ctx context.Context, userDetails authc.UserDetails) {
+	if la, ok := s.authenticator.(authc.LogoutAware); ok {
+		la.Logout(ctx, userDetails)
+	}
+
+	if la, ok := s.authorizer.(authc.LogoutAware); ok {
+		la.Logout(ctx, userDetails)
+	}
+
+	if la, ok := s.registry.(authc.LogoutAware); ok {
+		la.Logout(ctx, userDetails)
+	}
+
+	if la, ok := s.repository.(authc.LogoutAware); ok {
+		la.Logout(ctx, userDetails)
+	}
 }
 
 func apply(opts ...LoginOption) *LoginOptions {

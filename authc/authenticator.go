@@ -31,6 +31,7 @@ func (c *authenticator) Authenticate(ctx context.Context, token Token) (UserDeta
 		if r.Supports(token) {
 			user, err := r.LoadUserDetails(ctx, token)
 			if err != nil {
+				// gives other realm a chance
 				if errors.Is(err, ErrUnauthenticated) {
 					continue
 				}

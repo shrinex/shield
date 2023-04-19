@@ -23,9 +23,14 @@ type (
 	}
 )
 
-var _ Codec = (*codec)(nil)
+var (
+	// JSON codec
+	JSON = newCodec()
 
-func NewCodec() Codec {
+	_ Codec = (*codec)(nil)
+)
+
+func newCodec() Codec {
 	return &codec{}
 }
 

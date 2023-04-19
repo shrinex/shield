@@ -94,3 +94,11 @@ func (z *authorizer) HasAllAuthority(ctx context.Context, userDetails authc.User
 
 	return true
 }
+
+func (z *authorizer) Logout(ctx context.Context, userDetails authc.UserDetails) {
+	for _, r := range z.realms {
+		if la, ok := r.(authc.LogoutAware); ok {
+			la.Logout(ctx, userDetails)
+		}
+	}
+}

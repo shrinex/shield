@@ -10,7 +10,7 @@ import (
 type (
 	// Repository is an interface for managing Session instances
 	Repository[S Session] interface {
-		// Save ensures the Session created by Create) is saved
+		// Save ensures the Session created by Create is saved
 		Save(context.Context, S) error
 		// Remove the Session with the given token or does nothing if the Session is not found
 		Remove(context.Context, string) error
@@ -21,6 +21,7 @@ type (
 		Create(context.Context, string) (S, error)
 	}
 
+	// MapSessionRepository is a Repository backed by a map and that uses a MapSession
 	MapSessionRepository struct {
 		mu          sync.RWMutex
 		stopGuard   sync.Once

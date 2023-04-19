@@ -6,7 +6,7 @@ import (
 	"github.com/shrinex/shield/semgt"
 )
 
-// Builder provides a way to create Subject.
+// Builder provides a way to create Subject
 type Builder[S semgt.Session] struct {
 	authenticator authc.Authenticator
 	authorizer    authz.Authorizer

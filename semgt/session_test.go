@@ -16,7 +16,7 @@ func TestNewSession(t *testing.T) {
 
 	ctx := context.TODO()
 	key := uuid.NewString()
-	ss := NewSession(key, codec.NewCodec())
+	ss := NewSession(key, codec.JSON)
 
 	assert.Equal(t, key, ss.Token())
 
@@ -42,14 +42,14 @@ func TestNewSession(t *testing.T) {
 }
 
 func TestSetAttrNoErr(t *testing.T) {
-	ss := NewSession(uuid.NewString(), codec.NewCodec())
+	ss := NewSession(uuid.NewString(), codec.JSON)
 
 	err := ss.SetAttribute(context.TODO(), "key", "value")
 	assert.NoError(t, err)
 }
 
 func TestGetAttrWhenNotExists(t *testing.T) {
-	ss := NewSession(uuid.NewString(), codec.NewCodec())
+	ss := NewSession(uuid.NewString(), codec.JSON)
 
 	value, found, err := ss.AttributeAsString(context.TODO(), "key")
 	assert.NoError(t, err)
@@ -58,7 +58,7 @@ func TestGetAttrWhenNotExists(t *testing.T) {
 }
 
 func TestGetAttrLastSet(t *testing.T) {
-	ss := NewSession(uuid.NewString(), codec.NewCodec())
+	ss := NewSession(uuid.NewString(), codec.JSON)
 
 	_ = ss.SetAttribute(context.TODO(), "key", "value")
 	value, found, err := ss.AttributeAsString(context.TODO(), "key")

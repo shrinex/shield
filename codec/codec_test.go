@@ -26,7 +26,7 @@ var mockUser = UserDetails{
 }
 
 func TestCodec(t *testing.T) {
-	codec := NewCodec()
+	codec := newCodec()
 
 	json, err := codec.Encode(mockUser)
 	assert.NoError(t, err)
