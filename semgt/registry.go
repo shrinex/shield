@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"context"
 	"sync"
+	"time"
 )
 
 type (
@@ -32,18 +33,24 @@ type (
 		// lookup maps token to signature
 		lookup map[string]signature
 		// signs maps signature to tokens
-		signs map[signature]*list.List
+		signs     map[signature]*list.List
+		stopGuard sync.Once
+		stopChan  chan struct{}
 	}
 )
 
 var _ Registry[*MapSession] = (*MapSessionRegistry)(nil)
 
 func NewRegistry(repo *MapSessionRepository) *MapSessionRegistry {
-	return &MapSessionRegistry{
+	r := &MapSessionRegistry{
 		repo:   repo,
 		lookup: make(map[string]signature),
 		signs:  make(map[signature]*list.List),
 	}
+
+	go r.startCleanup()
+
+	return r
 }
 
 func (r *MapSessionRegistry) Register(ctx context.Context, principal string, session *MapSession) error {
@@ -107,6 +114,9 @@ func (r *MapSessionRegistry) Deregister(ctx context.Context, _ string, session *
 			break
 		}
 	}
+	if ls.Len() == 0 {
+		delete(r.signs, sign)
+	}
 
 	return nil
 }
@@ -119,26 +129,28 @@ func (r *MapSessionRegistry) ActiveSessions(ctx context.Context, principal strin
 	}
 
 	r.mu.RLock()
-	lists := make([]*list.List, 0)
-	for sign, ls := range r.signs {
-		if ls == nil || sign.principal != principal {
-			continue
+	var ls *list.List
+	for sign, l := range r.signs {
+		if l != nil && sign.principal == principal {
+			ls = l
+			break
 		}
-		lists = append(lists, ls)
 	}
 	r.mu.RUnlock()
 
-	sessions := make([]*MapSession, 0)
-	for _, ls := range lists {
-		for e := ls.Front(); e != nil; e = e.Next() {
-			session, err := r.repo.Read(ctx, e.Value.(string))
-			if err != nil {
-				return nil, err
-			}
+	if ls == nil {
+		return []*MapSession{}, nil
+	}
 
-			if session != nil {
-				sessions = append(sessions, session)
-			}
+	sessions := make([]*MapSession, 0)
+	for e := ls.Front(); e != nil; e = e.Next() {
+		session, err := r.repo.Read(ctx, e.Value.(string))
+		if err != nil {
+			return nil, err
+		}
+
+		if session != nil {
+			sessions = append(sessions, session)
 		}
 	}
 
@@ -147,4 +159,54 @@ func (r *MapSessionRegistry) ActiveSessions(ctx context.Context, principal strin
 
 func (r *MapSessionRegistry) KeepAlive(_ context.Context, _ string) error {
 	return nil
+}
+
+func (r *MapSessionRegistry) StopCleanup() error {
+	r.stopGuard.Do(func() {
+		close(r.stopChan)
+	})
+
+	return nil
+}
+
+func (r *MapSessionRegistry) startCleanup() {
+	ticker := time.NewTicker(3)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			r.deleteInactivated()
+		case <-r.stopChan:
+			break
+		}
+	}
+}
+
+func (r *MapSessionRegistry) deleteInactivated() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for sign, ls := range r.signs {
+		if ls == nil {
+			continue
+		}
+
+		ctx := context.Background()
+		for e := ls.Front(); e != nil; e = e.Next() {
+			session, err := r.repo.readSession(ctx, e.Value.(string), true)
+			if err != nil {
+				continue
+			}
+
+			if session != nil && session.GetExpired() {
+				delete(r.lookup, session.Token())
+				ls.Remove(e)
+			}
+		}
+
+		if ls.Len() == 0 {
+			delete(r.signs, sign)
+		}
+	}
 }

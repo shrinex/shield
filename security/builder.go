@@ -6,7 +6,7 @@ import (
 	"github.com/shrinex/shield/semgt"
 )
 
-// Builder provides a way to create Subject
+// Builder provides a fluent way to create Subject
 type Builder[S semgt.Session] struct {
 	authenticator authc.Authenticator
 	authorizer    authz.Authorizer
@@ -31,7 +31,7 @@ func (b *Builder[S]) Authorizer(authorizer authz.Authorizer) *Builder[S] {
 	return b
 }
 
-// Repository supplies a repository to help Subject create/read/update/remove a semgt.Session
+// Repository supplies a repository to help Subject manipulates semgt.Session
 func (b *Builder[S]) Repository(repository semgt.Repository[S]) *Builder[S] {
 	b.repository = repository
 	return b

@@ -15,7 +15,7 @@ type (
 		// StartTime returns the creation time
 		StartTime(context.Context) (time.Time, error)
 		// Timeout controls the maximum length of time that a
-		// session is valid for before it expires.
+		// session is valid for before it expires
 		Timeout(context.Context) (time.Duration, error)
 		// IdleTimeout controls the maximum length of time a
 		// session can be inactive before it expires
@@ -32,7 +32,7 @@ type (
 		SetAttribute(context.Context, string, any) error
 		// AttributeKeys returns the attribute keys that have a value associated with it
 		AttributeKeys(context.Context) ([]string, error)
-		// RemoveAttribute Rrmoves the attribute with the provided attribute key
+		// RemoveAttribute Removes the attribute with the provided attribute key
 		RemoveAttribute(context.Context, string) error
 		// Expired returns true if the session is expired
 		Expired(context.Context) (bool, error)
@@ -70,22 +70,18 @@ func NewSession(token string, codec codec.Codec) *MapSession {
 	}
 }
 
-func NewSessionCopy(src *MapSession) *MapSession {
-	s := &MapSession{
-		token:          src.token,
-		codec:          src.codec,
-		startTime:      src.startTime,
-		lastAccessTime: src.lastAccessTime,
-		timeout:        src.timeout,
-		idleTimeout:    src.idleTimeout,
+func NewSessionWithTimeout(token string, codec codec.Codec,
+	timeout time.Duration, idleTimeout time.Duration) *MapSession {
+	nowTime := nowFunc()
+	return &MapSession{
+		token:          token,
+		codec:          codec,
+		startTime:      nowTime,
+		lastAccessTime: nowTime,
+		timeout:        timeout,
+		idleTimeout:    idleTimeout,
 		attrs:          make(map[string]string),
 	}
-
-	for key, value := range src.attrs {
-		s.attrs[key] = value
-	}
-
-	return s
 }
 
 func (s *MapSession) Token() string {
@@ -137,24 +133,11 @@ func (s *MapSession) LastAccessTime(ctx context.Context) (time.Time, error) {
 }
 
 func (s *MapSession) Expired(ctx context.Context) (bool, error) {
-	select {
-	case <-ctx.Done():
-		return false, ctx.Err()
-	default:
+	if err := s.checkState(ctx); err != nil {
+		return false, err
 	}
 
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if _, ok := s.attrs[AlreadyExpiredKey]; ok {
-		return true, nil
-	}
-
-	nowTime := nowFunc()
-	timedOut := s.startTime.Add(s.timeout).Before(nowTime)
-	inactive := s.lastAccessTime.Add(s.idleTimeout).Before(nowTime)
-
-	return timedOut || inactive, nil
+	return s.GetExpired(), nil
 }
 
 func (s *MapSession) Attribute(ctx context.Context, key string, ptr any) (bool, error) {
@@ -354,6 +337,21 @@ func (s *MapSession) GetLastAccessTime() time.Time {
 	return s.lastAccessTime
 }
 
+func (s *MapSession) GetExpired() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if _, ok := s.attrs[AlreadyExpiredKey]; ok {
+		return true
+	}
+
+	nowTime := nowFunc()
+	timedOut := s.startTime.Add(s.timeout).Before(nowTime)
+	inactive := s.lastAccessTime.Add(s.idleTimeout).Before(nowTime)
+
+	return timedOut || inactive
+}
+
 func (s *MapSession) RawAttribute(key string) (string, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -383,8 +381,12 @@ func (s *MapSession) checkState(ctx context.Context) error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if _, ok := s.attrs[AlreadyKickedOutKey]; ok {
-		return ErrKickedOut
+	if _, ok := s.attrs[AlreadyReplacedKey]; ok {
+		return ErrReplaced
+	}
+
+	if _, ok := s.attrs[AlreadyOverflowKey]; ok {
+		return ErrOverflow
 	}
 
 	if _, ok := s.attrs[AlreadyExpiredKey]; ok {

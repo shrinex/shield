@@ -8,17 +8,21 @@ import (
 type (
 	// Role represents a user role
 	Role interface {
+		// Desc returns a string description that describe this role
 		Desc() string
+		// Implies returns true if the specified role is implied by this role
 		Implies(Role) bool
 	}
 
-	// Authority represents a granted permission
+	// Authority represents a granted authority
 	Authority interface {
+		// Desc returns a string description that describe this authority
 		Desc() string
+		// Implies returns true if the specified authority is implied by this authority
 		Implies(Authority) bool
 	}
 
-	// A Realm is responsible to load Role(s) and Authority(s)
+	// A Realm is responsible for loading Role(s) and Authority(s)
 	Realm interface {
 		// LoadRoles returns all Role(s) belong to the specified authc.UserDetails
 		LoadRoles(context.Context, authc.UserDetails) ([]Role, error)

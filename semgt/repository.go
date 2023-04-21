@@ -8,7 +8,7 @@ import (
 )
 
 type (
-	// Repository is an interface for managing Session instances
+	// Repository is an interface for manipulating Session instances
 	Repository[S Session] interface {
 		// Save ensures the Session created by Create is saved
 		Save(context.Context, S) error
@@ -69,32 +69,7 @@ func (r *MapSessionRepository) Create(ctx context.Context, token string) (*MapSe
 }
 
 func (r *MapSessionRepository) Read(ctx context.Context, token string) (*MapSession, error) {
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
-	}
-
-	r.mu.RLock()
-	src, ok := r.lookup[token]
-	r.mu.RUnlock()
-
-	if !ok {
-		return nil, nil
-	}
-
-	expired, err := src.Expired(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if expired {
-		_ = r.Remove(ctx, token)
-		_ = src.Stop(ctx)
-		return nil, nil
-	}
-
-	return NewSessionCopy(src), nil
+	return r.readSession(ctx, token, false)
 }
 
 func (r *MapSessionRepository) Save(ctx context.Context, session *MapSession) error {
@@ -107,7 +82,7 @@ func (r *MapSessionRepository) Save(ctx context.Context, session *MapSession) er
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	r.lookup[session.Token()] = NewSessionCopy(session)
+	r.lookup[session.Token()] = session
 
 	return nil
 }
@@ -128,6 +103,30 @@ func (r *MapSessionRepository) Remove(ctx context.Context, token string) error {
 	}
 
 	return nil
+}
+
+func (r *MapSessionRepository) readSession(ctx context.Context, token string, allowExpired bool) (*MapSession, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
+	r.mu.RLock()
+	session, ok := r.lookup[token]
+	r.mu.RUnlock()
+
+	if !ok {
+		return nil, nil
+	}
+
+	if !allowExpired && session.GetExpired() {
+		_ = r.Remove(ctx, token)
+		_ = session.Stop(ctx)
+		return nil, nil
+	}
+
+	return session, nil
 }
 
 func (r *MapSessionRepository) StopCleanup() error {
@@ -158,7 +157,7 @@ func (r *MapSessionRepository) deleteExpired() {
 
 	ctx := context.TODO()
 	for _, ss := range r.lookup {
-		if expired, _ := ss.Expired(ctx); expired {
+		if expired := ss.GetExpired(); expired {
 			delete(r.lookup, ss.Token())
 			_ = ss.Stop(ctx)
 		}

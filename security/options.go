@@ -2,6 +2,7 @@ package security
 
 import (
 	"github.com/google/uuid"
+	"github.com/shrinex/shield/authc"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -12,24 +13,32 @@ type (
 	Option func(*Options)
 
 	// Options contains config attribute that can
-	// affect how Subject manages the semgt.Session
+	// affect how Subject manages semgt.Session(s)
 	Options struct {
-		// Timeout 决定会话超时时间
+		// Timeout controls the maximum length of time that a
+		// session is valid for before it expires
 		Timeout time.Duration
-		// IdleTimeout 表示多久不进行操作就会过期
+		// IdleTimeout controls the maximum length of time a
+		// session can be inactive before it expires
 		IdleTimeout time.Duration
-		// Concurrency 表示并发登录的数量
+		// Concurrency controls the maximum active sessions
 		Concurrency int
-		// NewToken 指定 token 的生成函数
-		NewToken func(any) string
+		// Exclusive controls whether a user can be logged-in
+		// a platform multiple times at the sametime
+		Exclusive bool
+		// NewToken is a factory method that generates session token
+		NewToken func(authc.UserDetails) string
 	}
 
+	// LoginOption can be used to customize LoginOptions
 	LoginOption func(*LoginOptions)
 
+	// LoginOptions contains config attribute that can
+	// be used during login attempt
 	LoginOptions struct {
-		// Platform 指定登录平台
+		// Platform specifies the login platform
 		Platform string
-		// RenewToken 指定登陆时是否需要生成 token
+		// RenewToken specifies whether to generate a new token or not
 		RenewToken bool
 	}
 )
@@ -69,7 +78,8 @@ func defaultGlobalOptions() *atomic.Value {
 		Timeout:     12 * time.Hour,
 		IdleTimeout: time.Hour,
 		Concurrency: 1,
-		NewToken: func(any) string {
+		Exclusive:   true,
+		NewToken: func(authc.UserDetails) string {
 			return strings.ReplaceAll(uuid.NewString(), "-", "")
 		},
 	}

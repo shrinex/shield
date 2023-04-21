@@ -188,7 +188,7 @@ func (s *subject[S]) HasAllAuthority(ctx context.Context, authorities ...authz.A
 //=====================================
 
 func (s *subject[S]) loginWithNewToken(ctx context.Context, userDetails authc.UserDetails, opt *LoginOptions) (context.Context, error) {
-	err := s.kickOutOldestIfNeeded(ctx, userDetails)
+	err := s.applyGlobalOptions(ctx, userDetails, opt)
 	if err != nil {
 		return ctx, err
 	}
@@ -207,20 +207,75 @@ func (s *subject[S]) loginWithNewToken(ctx context.Context, userDetails authc.Us
 	return context.WithValue(ctx, userDetailsCtxKey{}, userDetails), nil
 }
 
-func (s *subject[S]) kickOutOldestIfNeeded(ctx context.Context, userDetails authc.UserDetails) error {
-	// 踢掉多余的
+func (s *subject[S]) applyGlobalOptions(ctx context.Context, userDetails authc.UserDetails, opt *LoginOptions) error {
 	sessions, err := s.registry.ActiveSessions(ctx, userDetails.Principal())
 	if err != nil {
 		return err
 	}
 
+	sessions, err = s.applyExclusiveOption(ctx, userDetails, sessions, opt)
+	if err != nil {
+		return err
+	}
+
+	err = s.applyConcurrencyOption(ctx, userDetails, sessions)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *subject[S]) applyExclusiveOption(ctx context.Context, userDetails authc.UserDetails, sessions []S, opt *LoginOptions) ([]S, error) {
+	if GetGlobalOptions().Exclusive {
+		j := 0
+		for _, ss := range sessions {
+			platform, found, err := ss.AttributeAsString(ctx, PlatformKey)
+			if err != nil {
+				return nil, err
+			}
+
+			if !found || len(platform) == 0 {
+				platform = DefaultPlatform
+			}
+
+			if opt.Platform != platform {
+				sessions[j] = ss
+				j += 1
+				continue
+			}
+
+			// 同端互斥
+			err = s.registry.Deregister(ctx, userDetails.Principal(), ss)
+			if err != nil {
+				return nil, err
+			}
+
+			err = s.repository.Remove(ctx, ss.Token())
+			if err != nil {
+				return nil, err
+			}
+
+			err = ss.SetAttribute(ctx, semgt.AlreadyReplacedKey, true)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		return sessions[:j], nil
+	}
+
+	return sessions, nil
+}
+
+func (s *subject[S]) applyConcurrencyOption(ctx context.Context, userDetails authc.UserDetails, sessions []S) error {
 	numSessions := len(sessions)
 	concurrency := GetGlobalOptions().Concurrency
 	if numSessions >= concurrency {
 		sort.Sort(byLastAccessTime[S](sessions))
 		expires := sessions[:numSessions-concurrency+1]
 		for _, ss := range expires {
-			err = s.registry.Deregister(ctx, userDetails.Principal(), ss)
+			err := s.registry.Deregister(ctx, userDetails.Principal(), ss)
 			if err != nil {
 				return err
 			}
@@ -230,7 +285,7 @@ func (s *subject[S]) kickOutOldestIfNeeded(ctx context.Context, userDetails auth
 				return err
 			}
 
-			err = ss.SetAttribute(ctx, semgt.AlreadyKickedOutKey, true)
+			err = ss.SetAttribute(ctx, semgt.AlreadyOverflowKey, true)
 			if err != nil {
 				return err
 			}
@@ -242,7 +297,7 @@ func (s *subject[S]) kickOutOldestIfNeeded(ctx context.Context, userDetails auth
 
 func (s *subject[S]) createAndSaveSession(ctx context.Context, userDetails authc.UserDetails, opt *LoginOptions) (session S, err error) {
 	// 创建新会话
-	newToken := GetGlobalOptions().NewToken(userDetails.Principal())
+	newToken := GetGlobalOptions().NewToken(userDetails)
 	session, err = s.repository.Create(ctx, newToken)
 	if err != nil {
 		return
