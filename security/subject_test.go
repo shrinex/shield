@@ -23,7 +23,7 @@ func (r *mockRealm) LoadUserDetails(ctx context.Context, token authc.Token) (aut
 
 func TestLogin(t *testing.T) {
 	token := authc.NewUsernamePasswordToken("archer", "123")
-	repository := semgt.NewRepository(codec.JSON, 10*time.Minute, time.Minute)
+	repository := semgt.NewRepository(codec.JSON, time.Hour, time.Hour)
 	authenticator := authc.NewAuthenticator(&mockRealm{})
 	registry := semgt.NewRegistry(repository)
 	ctx := context.Background()
@@ -47,7 +47,7 @@ func TestExclusive(t *testing.T) {
 	GetGlobalOptions().Concurrency = 2
 
 	token := authc.NewUsernamePasswordToken("archer", "123")
-	repository := semgt.NewRepository(codec.JSON, 10*time.Minute, time.Minute)
+	repository := semgt.NewRepository(codec.JSON, time.Hour, time.Hour)
 	authenticator := authc.NewAuthenticator(&mockRealm{})
 	registry := semgt.NewRegistry(repository)
 	ctx := context.Background()
@@ -82,7 +82,7 @@ func TestExclusive(t *testing.T) {
 	sessions, err := registry.ActiveSessions(ctx, "archer")
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(sessions))
-	assert.Equal(t, curSession, sessions[0])
+	assert.Equal(t, curSession.Token(), sessions[0].Token())
 
 	ctx, err = sb.Login(ctx, token, WithPlatform("mobile"), WithRenewToken())
 	assert.NoError(t, err)
@@ -98,7 +98,7 @@ func TestExclusiveWithMultiPlatform(t *testing.T) {
 	GetGlobalOptions().Concurrency = 2
 
 	token := authc.NewUsernamePasswordToken("archer", "123")
-	repository := semgt.NewRepository(codec.JSON, 10*time.Minute, time.Minute)
+	repository := semgt.NewRepository(codec.JSON, time.Hour, time.Hour)
 	authenticator := authc.NewAuthenticator(&mockRealm{})
 	registry := semgt.NewRegistry(repository)
 	ctx := context.Background()
@@ -121,8 +121,10 @@ func TestExclusiveWithMultiPlatform(t *testing.T) {
 
 	ctx, err = sb.Login(ctx, token, WithPlatform("mobile"), WithRenewToken())
 	assert.NoError(t, err)
-	assert.True(t, sb.Authenticated(ctx))
+	curSession, err := sb.Session(ctx)
+	assert.NoError(t, err)
 
+	// 被挤掉
 	ss, err := repository.Read(ctx, firstSession.Token())
 	assert.NoError(t, err)
 	assert.Nil(t, ss)
@@ -132,18 +134,39 @@ func TestExclusiveWithMultiPlatform(t *testing.T) {
 	assert.False(t, ok)
 	assert.False(t, replaced)
 
+	// 不同平台可以互存
+	ss, err = repository.Read(ctx, secondSession.Token())
+	assert.NoError(t, err)
+	assert.NotNil(t, ss)
+
 	replaced, ok, err = secondSession.AttributeAsBool(ctx, semgt.AlreadyReplacedKey)
 	assert.NoError(t, err)
 	assert.False(t, ok)
 	assert.False(t, replaced)
 
-	curSession, err := sb.Session(ctx)
-	assert.NoError(t, err)
-
 	sessions, err := registry.ActiveSessions(ctx, "archer")
 	assert.NoError(t, err)
-	assert.Equal(t, 1, len(sessions))
-	assert.Equal(t, curSession, sessions[0])
+	assert.Equal(t, 2, len(sessions))
+	assert.True(t, anyMatch(sessions, func(s *semgt.MapSession) bool {
+		return s.Token() == secondSession.Token()
+	}))
+	assert.True(t, anyMatch(sessions, func(s *semgt.MapSession) bool {
+		return s.Token() == curSession.Token()
+	}))
+}
+
+func anyMatch[E any](s []E, predicate func(E) bool) bool {
+	if len(s) == 0 {
+		return false
+	}
+
+	for _, e := range s {
+		if predicate(e) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func TestOverflow(t *testing.T) {
@@ -152,7 +175,7 @@ func TestOverflow(t *testing.T) {
 	GetGlobalOptions().Concurrency = 1
 
 	token := authc.NewUsernamePasswordToken("archer", "123")
-	repository := semgt.NewRepository(codec.JSON, 10*time.Minute, time.Minute)
+	repository := semgt.NewRepository(codec.JSON, time.Hour, time.Hour)
 	authenticator := authc.NewAuthenticator(&mockRealm{})
 	registry := semgt.NewRegistry(repository)
 	ctx := context.Background()
@@ -187,7 +210,7 @@ func TestOverflow(t *testing.T) {
 	sessions, err := registry.ActiveSessions(ctx, "archer")
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(sessions))
-	assert.Equal(t, curSession, sessions[0])
+	assert.Equal(t, curSession.Token(), sessions[0].Token())
 
 	ctx, err = sb.Login(ctx, token, WithPlatform("mobile"), WithRenewToken())
 	assert.NoError(t, err)

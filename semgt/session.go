@@ -70,7 +70,7 @@ func NewSession(token string, codec codec.Codec) *MapSession {
 	}
 }
 
-func NewSessionWithTimeout(token string, codec codec.Codec,
+func NewSessionTimeout(token string, codec codec.Codec,
 	timeout time.Duration, idleTimeout time.Duration) *MapSession {
 	nowTime := nowFunc()
 	return &MapSession{

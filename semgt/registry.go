@@ -129,28 +129,29 @@ func (r *MapSessionRegistry) ActiveSessions(ctx context.Context, principal strin
 	}
 
 	r.mu.RLock()
-	var ls *list.List
-	for sign, l := range r.signs {
-		if l != nil && sign.principal == principal {
-			ls = l
-			break
+	var lists []*list.List
+	for sign, ls := range r.signs {
+		if ls != nil && sign.principal == principal {
+			lists = append(lists, ls)
 		}
 	}
 	r.mu.RUnlock()
 
-	if ls == nil {
+	if lists == nil {
 		return []*MapSession{}, nil
 	}
 
 	sessions := make([]*MapSession, 0)
-	for e := ls.Front(); e != nil; e = e.Next() {
-		session, err := r.repo.Read(ctx, e.Value.(string))
-		if err != nil {
-			return nil, err
-		}
+	for _, ls := range lists {
+		for e := ls.Front(); e != nil; e = e.Next() {
+			session, err := r.repo.Read(ctx, e.Value.(string))
+			if err != nil {
+				return nil, err
+			}
 
-		if session != nil {
-			sessions = append(sessions, session)
+			if session != nil {
+				sessions = append(sessions, session)
+			}
 		}
 	}
 

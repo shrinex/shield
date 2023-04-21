@@ -60,12 +60,15 @@ func (r *MapSessionRepository) Create(ctx context.Context, token string) (*MapSe
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	result := NewSession(token, r.codec)
-	result.SetTimeout(r.timeout)
-	result.SetIdleTimeout(r.idleTimeout)
-	r.lookup[token] = result
+	session := NewSessionTimeout(
+		token,
+		r.codec,
+		r.timeout,
+		r.idleTimeout,
+	)
+	r.lookup[token] = session
 
-	return result, nil
+	return session, nil
 }
 
 func (r *MapSessionRepository) Read(ctx context.Context, token string) (*MapSession, error) {
