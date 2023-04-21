@@ -77,7 +77,7 @@ func defaultGlobalOptions() *atomic.Value {
 	options := Options{
 		Timeout:     12 * time.Hour,
 		IdleTimeout: time.Hour,
-		Concurrency: 1,
+		Concurrency: 2,
 		Exclusive:   true,
 		NewToken: func(authc.UserDetails) string {
 			return strings.ReplaceAll(uuid.NewString(), "-", "")
