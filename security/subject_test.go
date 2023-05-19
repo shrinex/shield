@@ -170,7 +170,7 @@ func anyMatch[E any](s []E, predicate func(E) bool) bool {
 }
 
 func TestOverflow(t *testing.T) {
-	GetGlobalOptions().Exclusive = false
+	GetGlobalOptions().SamePlatformProhibited = false
 
 	GetGlobalOptions().Concurrency = 1
 

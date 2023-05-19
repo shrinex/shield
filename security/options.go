@@ -23,9 +23,9 @@ type (
 		IdleTimeout time.Duration
 		// Concurrency controls the maximum active sessions
 		Concurrency int
-		// Exclusive controls whether a user can be logged-in
+		// SamePlatformProhibited controls whether a user can be logged-in
 		// a platform multiple times at the sametime
-		Exclusive bool
+		SamePlatformProhibited bool
 		// NewToken is a factory method that generates session token
 		NewToken func(authc.UserDetails) string
 	}
@@ -43,9 +43,9 @@ type (
 	}
 )
 
-//=====================================
-//		   Global Options
-//=====================================
+///=====================================
+///		   Global Options
+///=====================================
 
 func (opt *Options) GetTimeout() time.Duration {
 	if opt.Timeout > 0 {
@@ -75,10 +75,10 @@ var globalOptions = defaultGlobalOptions()
 
 func defaultGlobalOptions() *atomic.Value {
 	options := Options{
-		Timeout:     12 * time.Hour,
-		IdleTimeout: time.Hour,
-		Concurrency: 2,
-		Exclusive:   true,
+		Timeout:                12 * time.Hour,
+		IdleTimeout:            time.Hour,
+		Concurrency:            2,
+		SamePlatformProhibited: true,
 		NewToken: func(authc.UserDetails) string {
 			return strings.ReplaceAll(uuid.NewString(), "-", "")
 		},
@@ -89,9 +89,9 @@ func defaultGlobalOptions() *atomic.Value {
 	return v
 }
 
-//=====================================
-//		   Login Options
-//=====================================
+///=====================================
+///		   Login Options
+///=====================================
 
 var defaultLoginOptions = LoginOptions{
 	Platform:   DefaultPlatform,

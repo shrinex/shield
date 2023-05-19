@@ -277,9 +277,9 @@ func (s *MapSession) Stop(ctx context.Context) error {
 	return s.SetAttribute(ctx, AlreadyExpiredKey, true)
 }
 
-//=====================================
-//		    Getters & Setters
-//=====================================
+///=====================================
+///		    Getters & Setters
+///=====================================
 
 func (s *MapSession) SetStartTime(startTime time.Time) {
 	s.mu.Lock()

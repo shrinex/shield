@@ -183,9 +183,9 @@ func (s *subject[S]) HasAllAuthority(ctx context.Context, authorities ...authz.A
 	return s.authorizer.HasAllAuthority(ctx, userDetails, authorities...)
 }
 
-//=====================================
-//		    Private
-//=====================================
+///=====================================
+///		    Private
+///=====================================
 
 func (s *subject[S]) loginWithNewToken(ctx context.Context, userDetails authc.UserDetails, opt *LoginOptions) (context.Context, error) {
 	err := s.applyGlobalOptions(ctx, userDetails, opt)
@@ -227,7 +227,7 @@ func (s *subject[S]) applyGlobalOptions(ctx context.Context, userDetails authc.U
 }
 
 func (s *subject[S]) applyExclusiveOption(ctx context.Context, userDetails authc.UserDetails, sessions []S, opt *LoginOptions) ([]S, error) {
-	if GetGlobalOptions().Exclusive {
+	if GetGlobalOptions().SamePlatformProhibited {
 		j := 0
 		for _, ss := range sessions {
 			platform, found, err := ss.AttributeAsString(ctx, PlatformKey)
@@ -241,7 +241,7 @@ func (s *subject[S]) applyExclusiveOption(ctx context.Context, userDetails authc
 
 			if opt.Platform != platform {
 				sessions[j] = ss
-				j += 1
+				j++
 				continue
 			}
 
